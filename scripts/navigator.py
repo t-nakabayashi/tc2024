@@ -8,6 +8,7 @@ from visualization_msgs.msg import Marker
 from sensor_msgs.msg import LaserScan
 import math
 import threading
+import os
 
 class TimeOptimalController:
     def __init__(self):
@@ -51,8 +52,17 @@ class TimeOptimalController:
         self.cmd_vel_pub = rospy.Publisher('ypspur_ros/cmd_vel', Twist, queue_size=10)
         self.marker_pub = rospy.Publisher('/direction_marker', Marker, queue_size=1)  # マーカーパブリッシャ
 
+        # ログファイルの設定
+        self.log_file_path = os.path.join(os.path.expanduser('~'), 'control_log.csv')
+        self.log_file = open(self.log_file_path, 'w')
+        self.log_file.write('timestamp,v_current,w_current,v_desired,w_desired,angle_diff,distance_error,angle_scaling,v_desired_scaled,obstacle_distance\n')
+
         # 制御ループの開始
         self.control_loop()
+
+    def __del__(self):
+        # ログファイルを閉じる
+        self.log_file.close()
 
     def odom_callback(self, msg):
         """
@@ -80,15 +90,13 @@ class TimeOptimalController:
         LiDARデータを処理し、前方の障害物との最小距離を更新します。
         """
         with self.lock:
-            # ロボット前方±25cmの範囲で障害物を検出
-            # 角度に換算する
+            # ロボット前方±half_widthの範囲で障害物を検出
             half_width = self.robot_width / 2.0
             max_detection_distance = 5.0  # 障害物検出の最大距離 [m]
             angle_width = math.atan2(half_width, max_detection_distance)  # ラジアン
 
-            # インデックスの計算laser
+            # インデックスの計算
             angle_min = msg.angle_min
-            angle_max = msg.angle_max
             angle_increment = msg.angle_increment
             num_ranges = len(msg.ranges)
 
@@ -111,8 +119,7 @@ class TimeOptimalController:
             ranges_ahead = msg.ranges[index_right:index_left+1]
 
             # 有効な距離データをフィルタリング
-            valid_ranges = [r for r in ranges_ahead if not math.isinf(r) and not math.isnan(r) and not r<0.004]
-
+            valid_ranges = [r for r in ranges_ahead if not math.isinf(r) and not math.isnan(r) and r > 0.004]
 
             if valid_ranges:
                 self.obstacle_distance = min(valid_ranges)
@@ -147,7 +154,7 @@ class TimeOptimalController:
         :param current_velocity: geometry_msgs/Twist 現在のロボットの速度
         :param target_pose: geometry_msgs/Pose 目標のロボットの姿勢
         :param prev_cmd_vel: geometry_msgs/Twist 前回のcmd_vel
-        :return: geometry_msgs/Twist 新しいcmd_vel
+        :return: geometry_msgs/Twist 新しいcmd_vel, dict デバッグ情報
         """
         # 現在の速度を取得
         v_current = current_velocity.linear.x if current_velocity else 0.0
@@ -171,20 +178,10 @@ class TimeOptimalController:
         # 位置誤差と角度誤差が許容範囲内かどうかをチェック
         position_within_tolerance = distance_error <= self.position_tolerance
 
-        # 位置誤差が許容範囲内の場合のみ、目標のヨー角に合わせる
-        """
-        if position_within_tolerance:
-            target_yaw = self.quaternion_to_yaw(target_pose.orientation)
-            yaw_error = self.normalize_angle(target_yaw - current_yaw)
-            angle_within_tolerance = abs(yaw_error) <= self.angle_tolerance
-        else:
-            angle_within_tolerance = abs(yaw_error) <= self.angle_tolerance
-        """
+        # 角度許容範囲のチェック
         angle_within_tolerance = abs(yaw_error) <= self.angle_tolerance
 
         # 角度差分に応じて速度を減算（角度差が大きいと速度を減らす）
-        # 角度差が0のとき最大速度、角度差がπのとき速度0
-        #print(distance_error)
         if distance_error >= 1:
             angle_scaling = max(0.0, min(1.0, (math.pi - angle_diff) / math.pi))
         else:
@@ -208,7 +205,7 @@ class TimeOptimalController:
             v_desired = 0.0
 
         # 角度差分に応じて速度を減算
-        v_desired *= angle_scaling
+        v_desired_scaled = v_desired * angle_scaling
 
         # 角速度の計算
         if not angle_within_tolerance and abs(yaw_error) > 0.01:
@@ -239,27 +236,39 @@ class TimeOptimalController:
         if self.obstacle_distance is not None:
             if self.obstacle_distance < self.min_obstacle_distance:
                 # 障害物が近すぎる場合は停止
-                v_desired = 0.0
+                v_desired_scaled = 0.0
             elif self.obstacle_distance < self.safety_distance:
                 # 安全距離内の場合、速度を減速
-                v_desired *= (self.obstacle_distance - self.min_obstacle_distance) / (self.safety_distance - self.min_obstacle_distance)
-                v_desired = max(0.0, v_desired)
+                v_desired_scaled *= (self.obstacle_distance - self.min_obstacle_distance) / (self.safety_distance - self.min_obstacle_distance)
+                v_desired_scaled = max(0.0, v_desired_scaled)
             # 障害物が十分遠い場合はそのまま
 
         # 最大速度制限の再確認
-        v_desired = max(0.0, min(self.max_v, v_desired))
+        v_desired_scaled = max(0.0, min(self.max_v, v_desired_scaled))
         w_desired = max(-self.max_w, min(self.max_w, w_desired))
 
         # Twistメッセージの生成
         cmd_vel = Twist()
-        cmd_vel.linear.x = v_desired
+        cmd_vel.linear.x = v_desired_scaled
         cmd_vel.linear.y = 0.0
         cmd_vel.linear.z = 0.0
         cmd_vel.angular.x = 0.0
         cmd_vel.angular.y = 0.0
         cmd_vel.angular.z = w_desired
 
-        return cmd_vel
+        # デバッグ情報の収集
+        debug_info = {
+            'v_current': v_current,
+            'w_current': w_current,
+            'v_desired': v_desired,
+            'w_desired': w_desired,
+            'angle_diff': angle_diff,
+            'distance_error': distance_error,
+            'angle_scaling': angle_scaling,
+            'v_desired_scaled': v_desired_scaled
+        }
+
+        return cmd_vel, debug_info
 
     def publish_direction_marker(self, current_pose, v_desired, w_desired):
         """
@@ -327,7 +336,7 @@ class TimeOptimalController:
                     target_pose = self.current_goal
 
                     # cmd_velを計算
-                    cmd_vel = self.compute_time_optimal_cmd_vel(
+                    cmd_vel, debug_info = self.compute_time_optimal_cmd_vel(
                         current_pose=self.current_pose,
                         current_velocity=self.current_velocity,
                         target_pose=target_pose,
@@ -336,6 +345,23 @@ class TimeOptimalController:
 
                     # cmd_velをパブリッシュ
                     self.cmd_vel_pub.publish(cmd_vel)
+
+                    # データを記録
+                    timestamp = rospy.Time.now().to_sec()
+                    data_line = '{},{},{},{},{},{},{},{},{},{}\n'.format(
+                        timestamp,
+                        debug_info['v_current'],
+                        debug_info['w_current'],
+                        debug_info['v_desired'],
+                        debug_info['w_desired'],
+                        debug_info['angle_diff'],
+                        debug_info['distance_error'],
+                        debug_info['angle_scaling'],
+                        debug_info['v_desired_scaled'],
+                        self.obstacle_distance if self.obstacle_distance is not None else 'NaN'
+                    )
+                    self.log_file.write(data_line)
+                    self.log_file.flush()
 
                     # 進行方向マーカーをパブリッシュ
                     self.publish_direction_marker(self.current_pose, cmd_vel.linear.x, cmd_vel.angular.z)
