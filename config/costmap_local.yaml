@@ -1,0 +1,19 @@
+local_costmap:
+  global_frame: map
+  robot_base_frame: base_link
+  update_frequency: 5.0
+  publish_frequency: 3.0
+  static_map: true
+  inflation_radius: 0.2
+  rolling_window: true
+  width: 10
+  height: 10
+  resolution: 0.05
+  plugins:
+   - {name: static_layer, type: "costmap_2d::StaticLayer"}
+   - {name: obstacle_layer, type: "costmap_2d::ObstacleLayer"}
+   - {name: inflation_layer, type: "costmap_2d::InflationLayer"}
+
+  obstacle_layer:
+    observation_sources: laser
+    laser: {topic: scan_livox_front_low_move_zero, data_type: LaserScan, expected_update_rate: 0.1, observation_persistence: 0.0, marking: true, clearing: true}

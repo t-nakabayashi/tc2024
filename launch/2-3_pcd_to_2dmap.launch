@@ -1,0 +1,14 @@
+<launch>
+
+  <!-- パラメータの設定 -->
+  <param name="cleaned_pcd_file" value="$(find fast_lio)/PCD/scans_cleaned.pcd"/>
+  <param name="map_file" value="$(find fast_lio)/PCD/scans_cleaned_2d.png"/>
+  <param name="yaml_file" value="$(find fast_lio)/PCD/scans_cleaned_2d.yaml"/>
+  <param name="resolution" value="0.15"/>
+  <param name="map_width" value="8240"/>
+  <param name="map_height" value="8240"/>
+  <param name="noise_threshold" value="3"/>
+  <!-- ポイントクラウドを2Dマップに変換するノードを起動 -->
+  <node name="pointcloud_to_map" pkg="tc2024" type="3dpoint_to_2dmap.py" output="screen" />
+
+</launch>

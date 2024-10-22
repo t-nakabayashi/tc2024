@@ -1,0 +1,13 @@
+<launch>
+	<arg name="waypoint_file" default="$(find fast_lio)/PCD/waypoint.csv" />
+
+	<node pkg="tc2024" name="waypoint_manager" type="waypoint_manager.py" output="screen" >
+		<param name="start_num"	value="2"/>
+		<param name="waypoint"             value="$(arg waypoint_file)"/>
+	</node>
+
+
+	<node pkg="tc2024" name="navigator" type="navigator.py" output="screen" >
+	</node>
+
+</launch>

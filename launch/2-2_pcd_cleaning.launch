@@ -1,0 +1,16 @@
+<launch>
+<!-- Launch file for Livox AVIA LiDAR -->
+	<arg name="waypoint_file" default="$(find fast_lio)/PCD/waypoint.csv" />
+	<arg name="pcd_file" default="$(find fast_lio)/PCD/scans.pcd" />
+    <arg name="cleaned_pcd_file" default="$(find fast_lio)/PCD/scans_cleaned.pcd" />
+    <arg name="light_pcd_file" default="$(find fast_lio)/PCD/scans_light.pcd" />
+
+    <param name="waypoint" value="$(arg waypoint_file)"/>
+    <param name="pcd" value="$(arg pcd_file)"/>
+    <param name="cleaned_pcd" value="$(arg cleaned_pcd_file)"/>
+    <param name="light_pcd" value="$(arg light_pcd_file)"/>
+
+
+	<node pkg="tc2024" name="del_point" type="del_point.py" output="screen" />
+
+</launch>

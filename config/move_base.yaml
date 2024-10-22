@@ -1,0 +1,13 @@
+base_global_planner: "navfn/NavfnROS"
+base_local_planner: "dwa_local_planner/DWAPlannerROS"
+#base_global_planner: carrot_planner/CarrotPlanner
+#base_local_planner: "eband_local_planner/EBandPlannerROS"
+#base_local_planner: "base_local_planner/TrajectoryPlannerROS"
+
+planner_frequency: 4.0
+
+shutdown_costmaps: true
+planner_patience: 60.0
+controller_frequency: 20.0
+recovery_behaviour_enabled: false
+clearing_rotation_allowed: false

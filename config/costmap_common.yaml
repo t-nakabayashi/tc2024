@@ -1,0 +1,9 @@
+footprint: [[0.2, 0.2], [-0.3, 0.2], [-0.3, -0.2], [0.2, -0.2]]
+
+obstacle_range: 6.0
+raytrace_range: 7.0
+
+robot_radius: 0.2
+footprint_padding: 0.1
+
+unknown_cost_value: 0

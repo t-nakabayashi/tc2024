@@ -1,0 +1,49 @@
+DWAPlannerROS:
+  acc_lim_x: 1.5
+  acc_lim_y: 0.0
+  acc_lim_th: 3.0
+
+  max_trans_vel: 1.1
+  min_trans_vel: 0.1
+  max_vel_x: 1.1
+  min_vel_x: 0.1
+  max_vel_y: 0.0
+  min_vel_y: 0.0
+  max_rot_vel: 1.0
+  min_rot_vel: 0.3
+
+  yaw_goal_tolerance: 0.2
+  xy_goal_tolerance: 0.2
+  latch_xy_goal_tolerance: false
+
+  sim_time: 1.3
+  sim_granularity: 0.02
+  track_unknown_space: false
+
+  
+EBandPlannerROS:
+  # Goal
+  xy_goal_torelance: 0.5
+
+  # Trajectory
+  max_vel_lin: 0.8
+  max_vel_th: 0.8
+  min_vel_lin: -0.8
+  min_vel_th: -1.0
+
+TrajectoryPlannerROS:
+    acc_lim_x: 1.5
+    acc_lim_theta: 3.2
+    max_vel_x: 0.8
+    min_vel_x: 0.0
+    max_vel_theta: 0.8
+    min_vel_theta: -0.8
+    min_in_place_vel_theta: 0.3
+    holonomic_robot: false
+    yaw_goal_tolerance: 0.2
+    xy_goal_tolerance: 0.2
+    pdist_scale: 2.0
+    gdist_scale: 0.3
+    occdist_scale: 0.01
+    
+    meter_scoring: true
