@@ -51,11 +51,11 @@
 	    <param name="compatible" value="1" />
 	    <remap from="/imu/data" to="/mid360/livox/imu" />
 	    <remap from="/odom" to="/ypspur_ros/odom" />
-	    <remap from="/cloud" to="/mid360/livox/lidar" />
-			<!--remap from="/cloud" to="/velodyne_points" /-->
-
-
+	    <!--remap from="/cloud" to="/mid360/livox/lidar" /-->
+		<!--remap from="/cloud" to="/velodyne_points" /-->
+		<remap from="/cloud" to="/merged_points" />
 	  </node>
+	  
 	  <node pkg="obj_to_pointcloud" type="obj_to_pointcloud" name="obj_to_pointcloud"
 	      if="$(arg use_cad_map)">
 	    <param name="objs" value="$(arg map_objs)" />
@@ -89,7 +89,7 @@
 		<rosparam file="$(find tc2024)/config/costmap_global.yaml" command="load" />
 		<rosparam file="$(find tc2024)/config/planner_local.yaml" command="load" />
 		<rosparam file="$(find tc2024)/config/planner_global.yaml" command="load" />
-		<remap from="cmd_vel" to="ypspur_ros/cmd_vel_movw" />
+		<remap from="cmd_vel" to="ypspur_ros/cmd_vel_move" />
     <remap from="odom" to="ypspur_ros/odom" />
 		<!--remap from="map" to="map_move" /-->
 	</node>
@@ -109,6 +109,10 @@
 	<!--clear_costmaps_client ノードの起動 -->
 	<node pkg="tc2024" name="clear_localmap" type="clear_localmap.py">
 			<param name="clear_interval_sec" value="1" />
+	</node>
+
+	<!--Lidarデータの統合スクリプトを起動 -->
+	<node pkg="tc2024" name="marge_lidar_data" type="marge_lidar_data.py">
 	</node>
 
 
