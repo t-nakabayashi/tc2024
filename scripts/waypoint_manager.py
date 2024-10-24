@@ -138,7 +138,7 @@ if __name__ == '__main__':
                 if int(pose[3]) < 1:
                     break
                 # mcl_poseを使用するように変更
-                print(math.sqrt((pose_x-goal.target_pose.pose.position.x)**2 + (pose_y-goal.target_pose.pose.position.y)**2 ))
+                #print(math.sqrt((pose_x-goal.target_pose.pose.position.x)**2 + (pose_y-goal.target_pose.pose.position.y)**2 ))
                 if(math.sqrt((pose_x-goal.target_pose.pose.position.x)**2 + (pose_y-goal.target_pose.pose.position.y)**2 ) <= 0.7):#昨年度は1.3だった
                     if pose[2][2] == False and pose[2][3] == False:
                         # isstopが両方Fである場合はすぐに次に行く

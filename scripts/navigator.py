@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import rospy
 from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped, Twist, Point
@@ -16,17 +15,24 @@ class TimeOptimalController:
         rospy.init_node('time_optimal_controller')
 
         # パラメータの設定
-        self.max_v = rospy.get_param('~MAX_VEL', 0.6)            # 最大線速度 [m/s]
+        self.max_v = rospy.get_param('~MAX_VEL', 0.8)            # 最大線速度 [m/s]
         self.max_w = rospy.get_param('~MAX_W', 1.5)              # 最大角速度 [rad/s]
         self.max_a_v = rospy.get_param('~MAX_ACC_V', 1.0)        # 最大線加速度 [m/s^2]
-        self.max_a_w = rospy.get_param('~MAX_ACC_W', 0.8)        # 最大角加速度 [rad/s^2]
-        self.position_tolerance = rospy.get_param('~POSITION_TOLERANCE', 0.3)  # 位置誤差の許容範囲 [m]
+        self.max_a_w = rospy.get_param('~MAX_ACC_W', 1.5)        # 最大角加速度 [rad/s^2]
+        self.position_tolerance = rospy.get_param('~POSITION_TOLERANCE', 0.4)  # 位置誤差の許容範囲 [m]
         self.angle_tolerance = rospy.get_param('~ANGLE_TOLERANCE', 0.2)        # 角度誤差の許容範囲 [rad]
         self.control_rate_hz = rospy.get_param('~CONTROL_RATE', 20.0)          # 制御周期 [Hz]
         self.control_dt = 1.0 / self.control_rate_hz                           # 制御周期 [s]
 
+        # PID制御の初期化（角速度用）
+        self.kp_w = 0.5  # Pゲイン
+        self.ki_w = 0.02  # Iゲイン
+        self.kd_w = 0.02  # Dゲイン
+        self.integral_w = 0.0
+        self.prev_yaw_error = 0.0
+ 
         # 障害物検知のパラメータ
-        self.robot_width = 0.8  # ロボットの幅 [m]
+        self.robot_width = 1.2  # ロボットの幅 [m]
         self.safety_distance = 1.5  # 障害物との安全距離 [m]
         self.min_obstacle_distance = 0.6  # 最小許容距離 [m]
         self.obstacle_distance = None  # 前方障害物までの距離
@@ -70,7 +76,7 @@ class TimeOptimalController:
         """
         with self.lock:
             self.current_velocity = msg.twist.twist
-
+ 
     def pose_callback(self, msg):
         """
         AMCL Poseメッセージを受け取って、現在の位置姿勢を更新します。
@@ -82,7 +88,8 @@ class TimeOptimalController:
         """
         現在のゴールを受け取って、目標位置姿勢を更新します。
         """
-        with self.lock:
+        print(msg.pose)
+        with self.lock: 
             self.current_goal = msg.pose
 
     def laser_scan_callback(self, msg):
@@ -115,7 +122,7 @@ class TimeOptimalController:
             if index_left < index_right:
                 index_left, index_right = index_right, index_left
 
-            # 範囲内の距離データを取得
+            # 範囲内の距離データを取得 
             ranges_ahead = msg.ranges[index_right:index_left+1]
 
             # 有効な距離データをフィルタリング
@@ -173,22 +180,31 @@ class TimeOptimalController:
 
         # ベアリング角と現在のヨー角の差分を角度誤差とする
         yaw_error = self.normalize_angle(target_bearing - current_yaw)
+        print(target_bearing , current_yaw, yaw_error, distance_error)
         angle_diff = abs(yaw_error)
 
-        # 位置誤差と角度誤差が許容範囲内かどうかをチェック
-        position_within_tolerance = distance_error <= self.position_tolerance
+        # ロボットの進行方向に基づいて、目標点との交差を確認
+        line_x = math.cos(current_yaw)
+        line_y = math.sin(current_yaw)
 
-        # 角度許容範囲のチェック
-        angle_within_tolerance = abs(yaw_error) <= self.angle_tolerance
+        # ロボットから目標点までの直線と、目標点を中心とした誤差円の交差判定
+        # 判定のためのベクトル計算（直線と目標円の交差点があるかどうか）
+        a = line_x**2 + line_y**2
+        b = 2 * (dx * line_x + dy * line_y)
+        c = dx**2 + dy**2 - self.position_tolerance**2
 
-        # 角度差分に応じて速度を減算（角度差が大きいと速度を減らす）
-        if distance_error >= 1:
-            angle_scaling = max(0.0, min(1.0, (math.pi - angle_diff) / math.pi))
+        # 判別式で交差判定を行う
+        discriminant = b**2 - 4 * a * c
+
+        if discriminant >= 0:
+            # 交差する場合（目標点の誤差範囲に到達可能）
+            angle_scaling = 1.0  # 最大速度で進む
         else:
-            angle_scaling = 1.0
+            # 交差しない場合（誤差範囲外）
+            angle_scaling = max(0.0, 1.0 - (angle_diff / math.pi))  # 速度を減少させる
 
         # 線速度の計算
-        if not position_within_tolerance and distance_error > 0.0:
+        if distance_error > 0.0:
             # 停止するために必要な減速距離
             stopping_distance = (v_current ** 2) / (2 * self.max_a_v) if self.max_a_v != 0 else 0.0
 
@@ -207,30 +223,18 @@ class TimeOptimalController:
         # 角度差分に応じて速度を減算
         v_desired_scaled = v_desired * angle_scaling
 
-        # 角速度の計算
-        if not angle_within_tolerance and abs(yaw_error) > 0.01:
-            # 停止するために必要な減速角度
-            stopping_angle = (w_current ** 2) / (2 * self.max_a_w) if self.max_a_w != 0 else 0.0
+        # PID制御による角速度の計算
+        self.integral_w += yaw_error * self.control_dt
+        derivative_w = (yaw_error - self.prev_yaw_error) / self.control_dt
 
-            if abs(yaw_error) > stopping_angle:
-                # 加速
-                if yaw_error > 0:
-                    w_desired = w_current + self.max_a_w * self.control_dt
-                    w_desired = min(w_desired, self.max_w)
-                else:
-                    w_desired = w_current - self.max_a_w * self.control_dt
-                    w_desired = max(w_desired, -self.max_w)
-            else:
-                # 減速
-                if w_current > 0:
-                    w_desired = w_current - self.max_a_w * self.control_dt
-                    w_desired = max(w_desired, 0.0)
-                else:
-                    w_desired = w_current + self.max_a_w * self.control_dt
-                    w_desired = min(w_desired, 0.0)
-        else:
-            # 許容範囲内の場合、角速度をゼロに設定
-            w_desired = 0.0
+        w_desired = (self.kp_w * yaw_error +
+                    self.ki_w * self.integral_w +
+                    self.kd_w * derivative_w)
+
+        self.prev_yaw_error = yaw_error
+
+        # 角速度の最大制限を適用
+        w_desired = max(-self.max_w, min(self.max_w, w_desired))
 
         # 前方の障害物に応じて速度を調整
         if self.obstacle_distance is not None:
@@ -245,7 +249,10 @@ class TimeOptimalController:
 
         # 最大速度制限の再確認
         v_desired_scaled = max(0.0, min(self.max_v, v_desired_scaled))
-        w_desired = max(-self.max_w, min(self.max_w, w_desired))
+
+        if distance_error <= self.position_tolerance:
+            v_desired_scaled = 0
+            w_desired = 0            
 
         # Twistメッセージの生成
         cmd_vel = Twist()
@@ -269,6 +276,7 @@ class TimeOptimalController:
         }
 
         return cmd_vel, debug_info
+
 
     def publish_direction_marker(self, current_pose, v_desired, w_desired):
         """
