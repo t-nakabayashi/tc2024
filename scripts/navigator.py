@@ -15,8 +15,8 @@ class TimeOptimalController:
         rospy.init_node('time_optimal_controller')
 
         # パラメータの設定
-        self.max_v = rospy.get_param('~MAX_VEL', 0.8)            # 最大線速度 [m/s]
-        self.max_w = rospy.get_param('~MAX_W', 1.5)              # 最大角速度 [rad/s]
+        self.max_v = rospy.get_param('~MAX_VEL', 1.0)            # 最大線速度 [m/s]
+        self.max_w = rospy.get_param('~MAX_W', 1.8)              # 最大角速度 [rad/s]
         self.max_a_v = rospy.get_param('~MAX_ACC_V', 1.0)        # 最大線加速度 [m/s^2]
         self.max_a_w = rospy.get_param('~MAX_ACC_W', 1.5)        # 最大角加速度 [rad/s^2]
         self.position_tolerance = rospy.get_param('~POSITION_TOLERANCE', 0.4)  # 位置誤差の許容範囲 [m]
@@ -25,16 +25,16 @@ class TimeOptimalController:
         self.control_dt = 1.0 / self.control_rate_hz                           # 制御周期 [s]
 
         # PID制御の初期化（角速度用）
-        self.kp_w = 0.5  # Pゲイン
+        self.kp_w = 0.6  # Pゲイン
         self.ki_w = 0.02  # Iゲイン
         self.kd_w = 0.02  # Dゲイン
         self.integral_w = 0.0
         self.prev_yaw_error = 0.0
  
         # 障害物検知のパラメータ
-        self.robot_width = 1.2  # ロボットの幅 [m]
-        self.safety_distance = 1.5  # 障害物との安全距離 [m]
-        self.min_obstacle_distance = 0.6  # 最小許容距離 [m]
+        self.robot_width = 0.6  # ロボットの幅 [m]
+        self.safety_distance = 0.8  # 障害物との安全距離 [m]
+        self.min_obstacle_distance = 0.5  # 最小許容距離 [m]
         self.obstacle_distance = None  # 前方障害物までの距離
 
         # 現在の状態を保持する変数
@@ -88,11 +88,68 @@ class TimeOptimalController:
         """
         現在のゴールを受け取って、目標位置姿勢を更新します。
         """
-        print(msg.pose)
+        #print(msg.pose)
         with self.lock: 
             self.current_goal = msg.pose
 
     def laser_scan_callback(self, msg):
+        """
+        LiDARデータを処理し、前方の障害物との最小距離を更新します（ロボットの速度に基づいた動的安全距離）。
+        """
+        with self.lock:
+            # 現在の速度を取得
+            current_speed = self.current_velocity.linear.x if self.current_velocity else 0.0
+
+            # 最大減速度（線速度）を設定
+            max_deceleration = self.max_a_v  # 最大減速 [m/s^2]
+            safety_buffer = 0.5  # 安全距離バッファ [m]（50cm手前で停止するように設定）
+
+            # 現在の速度から停止距離を計算し、安全距離を設定
+            if max_deceleration > 0:
+                stopping_distance = (current_speed ** 2) / (2 * max_deceleration) + safety_buffer
+            else:
+                stopping_distance = safety_buffer  # 減速能力がない場合は単にバッファのみ
+
+            # ロボットの幅と前方の最大検出距離
+            half_width = self.robot_width / 2.0
+            max_detection_distance = 5.0  # 障害物検出の最大距離 [m]
+
+            # 有効な範囲内での最小距離を初期化
+            min_obstacle_distance = None
+
+            # 各ビームの距離と角度を処理
+            angle_min = msg.angle_min
+            angle_increment = msg.angle_increment
+
+            for i, r in enumerate(msg.ranges):
+                # 距離が無限大またはNaNの場合は無視
+                if math.isinf(r) or math.isnan(r) or r < 0.4:
+                    continue
+
+                # 各ビームの角度を計算
+                angle = angle_min + i * angle_increment
+
+                # ビームの位置をXY平面に変換
+                x = r * math.cos(angle)
+                y = r * math.sin(angle)
+
+                # 前方の長方形領域内にビームが存在するかチェック
+                if 0 <= x <= max_detection_distance and -half_width <= y <= half_width:
+                    # 障害物が検出された場合、最小距離を更新
+                    if min_obstacle_distance is None or r < min_obstacle_distance:
+                        min_obstacle_distance = r
+
+            # 更新した障害物までの最小距離を保存
+            self.obstacle_distance = min_obstacle_distance if min_obstacle_distance is not None else None
+
+            # 障害物の距離と停止距離を比較し、停止が必要かどうか判断
+            if self.obstacle_distance is not None and self.obstacle_distance < stopping_distance:
+                rospy.logwarn("Obstacle detected within stopping distance! Distance: {:.2f} m, Stopping Distance: {:.2f} m".format(
+                    self.obstacle_distance, stopping_distance
+                ))
+
+
+    def laser_scan_callback_old(self, msg):
         """
         LiDARデータを処理し、前方の障害物との最小距離を更新します。
         """
@@ -180,79 +237,55 @@ class TimeOptimalController:
 
         # ベアリング角と現在のヨー角の差分を角度誤差とする
         yaw_error = self.normalize_angle(target_bearing - current_yaw)
-        print(target_bearing , current_yaw, yaw_error, distance_error)
         angle_diff = abs(yaw_error)
-
-        # ロボットの進行方向に基づいて、目標点との交差を確認
-        line_x = math.cos(current_yaw)
-        line_y = math.sin(current_yaw)
-
-        # ロボットから目標点までの直線と、目標点を中心とした誤差円の交差判定
-        # 判定のためのベクトル計算（直線と目標円の交差点があるかどうか）
-        a = line_x**2 + line_y**2
-        b = 2 * (dx * line_x + dy * line_y)
-        c = dx**2 + dy**2 - self.position_tolerance**2
-
-        # 判別式で交差判定を行う
-        discriminant = b**2 - 4 * a * c
-
-        if discriminant >= 0:
-            # 交差する場合（目標点の誤差範囲に到達可能）
-            angle_scaling = 1.0  # 最大速度で進む
-        else:
-            # 交差しない場合（誤差範囲外）
-            angle_scaling = max(0.0, 1.0 - (angle_diff / math.pi))  # 速度を減少させる
-
-        # 線速度の計算
-        if distance_error > 0.0:
-            # 停止するために必要な減速距離
-            stopping_distance = (v_current ** 2) / (2 * self.max_a_v) if self.max_a_v != 0 else 0.0
-
-            if distance_error > stopping_distance:
-                # 加速
-                v_desired = v_current + self.max_a_v * self.control_dt
-                v_desired = min(v_desired, self.max_v)
-            else:
-                # 減速
-                v_desired = v_current - self.max_a_v * self.control_dt
-                v_desired = max(v_desired, 0.0)
-        else:
-            # 許容範囲内の場合、線速度をゼロに設定
-            v_desired = 0.0
-
-        # 角度差分に応じて速度を減算
-        v_desired_scaled = v_desired * angle_scaling
 
         # PID制御による角速度の計算
         self.integral_w += yaw_error * self.control_dt
         derivative_w = (yaw_error - self.prev_yaw_error) / self.control_dt
-
         w_desired = (self.kp_w * yaw_error +
                     self.ki_w * self.integral_w +
                     self.kd_w * derivative_w)
-
         self.prev_yaw_error = yaw_error
 
         # 角速度の最大制限を適用
         w_desired = max(-self.max_w, min(self.max_w, w_desired))
 
-        # 前方の障害物に応じて速度を調整
+        # 通常の速度制御（角度差分に応じた加減速）
+        if distance_error > 0.0:
+            v_desired = min(v_current + self.max_a_v * self.control_dt, self.max_v)
+        else:
+            v_desired = 0.0
+
+        # 角度差に応じた速度の減速（進行方向が大きくずれている場合に速度を減らす）
+        angle_scaling = max(0.0, 1.0 - (angle_diff / math.pi))
+        v_desired_scaled = v_desired * angle_scaling
+
+        # 障害物の距離と停止距離に基づいた速度調整
         if self.obstacle_distance is not None:
-            if self.obstacle_distance < self.min_obstacle_distance:
-                # 障害物が近すぎる場合は停止
+            max_deceleration = self.max_a_v
+            safety_buffer = 0.5  # 安全距離バッファ [m]
+
+            # 停止距離の計算
+            stopping_distance = (v_current ** 2) / (2 * max_deceleration) + safety_buffer
+
+            # 障害物の距離と停止距離を比較し、速度を減速または停止
+            if self.obstacle_distance < stopping_distance:
+                rospy.logwarn("Obstacle detected within stopping distance! Distance: {:.2f} m, Stopping Distance: {:.2f} m".format(
+                    self.obstacle_distance, stopping_distance
+                ))
                 v_desired_scaled = 0.0
             elif self.obstacle_distance < self.safety_distance:
-                # 安全距離内の場合、速度を減速
+                # 安全距離内に障害物がある場合、速度を減速
                 v_desired_scaled *= (self.obstacle_distance - self.min_obstacle_distance) / (self.safety_distance - self.min_obstacle_distance)
                 v_desired_scaled = max(0.0, v_desired_scaled)
-            # 障害物が十分遠い場合はそのまま
 
         # 最大速度制限の再確認
         v_desired_scaled = max(0.0, min(self.max_v, v_desired_scaled))
 
+        # 許容誤差内の場合、速度をゼロに設定
         if distance_error <= self.position_tolerance:
-            v_desired_scaled = 0
-            w_desired = 0            
+            v_desired_scaled = 0.0
+            w_desired = 0.0
 
         # Twistメッセージの生成
         cmd_vel = Twist()
@@ -276,6 +309,7 @@ class TimeOptimalController:
         }
 
         return cmd_vel, debug_info
+
 
 
     def publish_direction_marker(self, current_pose, v_desired, w_desired):
