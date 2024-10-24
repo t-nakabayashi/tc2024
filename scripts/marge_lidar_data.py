@@ -2,17 +2,30 @@
 
 import rospy
 from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import PointCloud2, PointField, Imu
+
 
 # パブリッシャの初期化
 pub = None
+pub2 = None
+pub2 = rospy.Publisher('/mid360/livox/imu_new', Imu, queue_size=10)
+
 
 # LivoxからのPointCloudデータをそのままパブリッシュするコールバック
 def livox_callback(msg):
+    msg.header.frame_id = "mid360_frame_new"
+    msg.header.stamp = rospy.Time.now()
     pub.publish(msg)
 
 # VelodyneからのPointCloudデータをそのままパブリッシュするコールバック
 def velodyne_callback(msg):
-    pub.publish(msg)
+    pass
+    #pub.publish(msg)
+
+def callback2(msg):
+    msg.header.frame_id = "mid360_frame_new"
+    msg.header.stamp = rospy.Time.now()
+    pub2.publish(msg)
 
 # ROSノードの初期化
 def listener():
@@ -25,6 +38,7 @@ def listener():
     # LivoxとVelodyneのPointCloud2トピックを購読
     rospy.Subscriber("/mid360/livox/lidar", PointCloud2, livox_callback)
     rospy.Subscriber("/velodyne_points", PointCloud2, velodyne_callback)
+    rospy.Subscriber("/mid360/livox/imu", Imu, callback2)
 
     # ROSのスピン（購読を維持）
     rospy.spin()
