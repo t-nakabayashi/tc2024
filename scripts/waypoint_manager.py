@@ -181,7 +181,7 @@ if __name__ == '__main__':
                 # Calculate the distance to the current goal
                 distance_to_goal = math.sqrt((pose_x - goal.target_pose.pose.position.x) ** 2 + (pose_y - goal.target_pose.pose.position.y) ** 2)
                 
-                if distance_to_goal <= 0.7:  # Close enough to the goal
+                if distance_to_goal <= 0.5:  # Close enough to the goal
                     if not pose[2][2] and not pose[2][3]:
                         # If both stop flags are False, move to the next goal immediately
                         print("next")
@@ -225,7 +225,7 @@ if __name__ == '__main__':
                         # Re-send original goal if there was an error and no sub-goal is active
                         client.send_goal(original_goal)
 
-                    if waitCounter_ms % 500 == 0 and not isSubGoalActive:
+                    if waitCounter_ms % 5000 == 0 and not isSubGoalActive:
                         # Re-send the original goal every 1 second if no sub-goal is active
                         #print("Resending original goal...")
                         client.send_goal(original_goal)
@@ -249,8 +249,8 @@ if __name__ == '__main__':
                         # Send the sub-goal
                         client.send_goal(goal)
 
-                    if waitCounter_ms % 30000 == 0:
-                        # If no progress after 30 seconds, move to the next goal if conditions allow
+                    if waitCounter_ms % 50000 == 0:
+                        # If no progress after 50 seconds, move to the next goal if conditions allow
                         if not pose[2][2] and not pose[2][3]:
                             if not pose[2][4]:
                                 break

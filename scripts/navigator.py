@@ -5,6 +5,7 @@ from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped, Twist, Poi
 from nav_msgs.msg import Odometry
 from visualization_msgs.msg import Marker
 from sensor_msgs.msg import LaserScan
+from move_base_msgs.msg import MoveBaseActionGoal  # 追加
 import math
 import threading
 import os
@@ -51,7 +52,7 @@ class TimeOptimalController:
         # サブスクライバの設定
         rospy.Subscriber('/ypspur_ros/odom', Odometry, self.odom_callback)
         rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.pose_callback)
-        rospy.Subscriber('/move_base/current_goal', PoseStamped, self.goal_callback)
+        rospy.Subscriber('/move_base/goal', MoveBaseActionGoal, self.goal_callback)  # 修正
         rospy.Subscriber('/scan_livox_front_low_move', LaserScan, self.laser_scan_callback)
 
         # パブリッシャの設定
@@ -88,9 +89,8 @@ class TimeOptimalController:
         """
         現在のゴールを受け取って、目標位置姿勢を更新します。
         """
-        #print(msg.pose)
         with self.lock: 
-            self.current_goal = msg.pose
+            self.current_goal = msg.goal.target_pose.pose  # 修正
 
     def laser_scan_callback(self, msg):
         """
@@ -123,7 +123,7 @@ class TimeOptimalController:
 
             for i, r in enumerate(msg.ranges):
                 # 距離が無限大またはNaNの場合は無視
-                if math.isinf(r) or math.isnan(r) or r < 0.4:
+                if math.isinf(r) or math.isnan(r) or r < 0.45:
                     continue
 
                 # 各ビームの角度を計算
@@ -147,48 +147,6 @@ class TimeOptimalController:
                 rospy.logwarn("Obstacle detected within stopping distance! Distance: {:.2f} m, Stopping Distance: {:.2f} m".format(
                     self.obstacle_distance, stopping_distance
                 ))
-
-
-    def laser_scan_callback_old(self, msg):
-        """
-        LiDARデータを処理し、前方の障害物との最小距離を更新します。
-        """
-        with self.lock:
-            # ロボット前方±half_widthの範囲で障害物を検出
-            half_width = self.robot_width / 2.0
-            max_detection_distance = 5.0  # 障害物検出の最大距離 [m]
-            angle_width = math.atan2(half_width, max_detection_distance)  # ラジアン
-
-            # インデックスの計算
-            angle_min = msg.angle_min
-            angle_increment = msg.angle_increment
-            num_ranges = len(msg.ranges)
-
-            # 正面のインデックス
-            index_center = int(round((0.0 - angle_min) / angle_increment))
-
-            # 左右のインデックス
-            index_left = int(round((angle_width - angle_min) / angle_increment))
-            index_right = int(round((-angle_width - angle_min) / angle_increment))
-
-            # インデックスの範囲をチェック
-            index_left = max(min(index_left, num_ranges - 1), 0)
-            index_right = max(min(index_right, num_ranges - 1), 0)
-
-            # インデックスの順序を確認
-            if index_left < index_right:
-                index_left, index_right = index_right, index_left
-
-            # 範囲内の距離データを取得 
-            ranges_ahead = msg.ranges[index_right:index_left+1]
-
-            # 有効な距離データをフィルタリング
-            valid_ranges = [r for r in ranges_ahead if not math.isinf(r) and not math.isnan(r) and r > 0.004]
-
-            if valid_ranges:
-                self.obstacle_distance = min(valid_ranges)
-            else:
-                self.obstacle_distance = None
 
     def quaternion_to_yaw(self, quat):
         """
@@ -309,8 +267,6 @@ class TimeOptimalController:
         }
 
         return cmd_vel, debug_info
-
-
 
     def publish_direction_marker(self, current_pose, v_desired, w_desired):
         """
