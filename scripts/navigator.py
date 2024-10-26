@@ -244,6 +244,7 @@ class TimeOptimalController:
         if distance_error <= self.position_tolerance:
             v_desired_scaled = 0.0
             w_desired = 0.0
+            self.integral_w = 0
 
         # Twistメッセージの生成
         cmd_vel = Twist()

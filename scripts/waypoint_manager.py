@@ -189,7 +189,8 @@ if __name__ == '__main__':
                         break
                     elif pose[2][2]:
                         # Line stop flag is True
-                        if distance_to_goal <= 0.5:
+                        if distance_to_goal <= 0.6:
+                            waitCounter_ms = 0
                             stopFlag = 1
                             print("wait!!")
                             input_data = input()  # Wait for user input to continue
@@ -198,7 +199,7 @@ if __name__ == '__main__':
                             break
                     elif pose[2][3]:
                         # Signal stop flag is True
-                        if distance_to_goal <= 0.5:
+                        if distance_to_goal <= 0.6:
                             print("signal!!!")
                             stopFlag = 1
                             recog = 0
@@ -220,7 +221,8 @@ if __name__ == '__main__':
                 else:
                     # Update waiting status and re-send goal if necessary
                     pub_recog.publish(0)
-                    waitCounter_ms += waitTime_ms
+                    if stopFlag != 1:
+                        waitCounter_ms += waitTime_ms
                     if isGoalError and not isSubGoalActive:
                         # Re-send original goal if there was an error and no sub-goal is active
                         client.send_goal(original_goal)
@@ -249,7 +251,7 @@ if __name__ == '__main__':
                         # Send the sub-goal
                         client.send_goal(goal)
 
-                    if waitCounter_ms % 50000 == 0:
+                    if waitCounter_ms % 1200000 == 0:
                         # If no progress after 50 seconds, move to the next goal if conditions allow
                         if not pose[2][2] and not pose[2][3]:
                             if not pose[2][4]:
