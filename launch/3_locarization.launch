@@ -39,15 +39,10 @@
 	    <remap from="imu/data" to="imu/data_unused" if="$(arg without_imu)" />
 	</node>
 
-	  <arg name="config_file" default="$(find mcl_3dl)/config/test_localization.yaml"
-	      unless="$(eval arg('without_odom') or arg('without_imu'))" />
-	  <arg name="config_file" default="$(find mcl_3dl)/config/test_localization_noodom.yaml"
-	      if="$(arg without_odom)" />
-	  <arg name="config_file" default="$(find mcl_3dl)/config/test_localization_noimu.yaml"
-	      if="$(arg without_imu)" />
+	  <arg name="config_file" default="$(find tc2024)/config/config_localization.yaml" />
 	  <rosparam command="load" file="$(arg config_file)"/>
 
-	  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find mcl_3dl)/config/mcl_3dl_demo.rviz" />
+	  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find tc2024)/config/mcl_3dl.rviz" />
 	  <node pkg="mcl_3dl" type="mcl_3dl" name="mcl_3dl" output="screen" unless="$(arg generate_test_bag)">
 	    <param name="compatible" value="1" />
 	    <remap from="/imu/data" to="/mid360/livox/imu_new" />
