@@ -47,8 +47,8 @@ cmake .. && make -j
 sudo make install
 
 # install livox ros driver2
-cd ./(your workspace)/src
-git clone https://github.com/Livox-SDK/livox_ros_driver2.git ws_livox/src/livox_ros_driver2
+cd ~/(your workspace)/src
+git clone https://github.com/Livox-SDK/livox_ros_driver2.git 
 cd ../
 catkin_make
 ~~~
@@ -66,7 +66,7 @@ sudo apt install ros-noetic-map-server
 #### install tf2 and mcl-3dl 
 ~~~
 sudo apt install ros-noetic-geometry2
-cd ./(your workspace)/src
+cd ~/(your workspace)/src
 git clone https://github.com/at-wat/mcl_3dl.git
 git clone https://github.com/at-wat/mcl_3dl_msgs.git
 ~~~
@@ -85,8 +85,8 @@ cd build && cmake ..
 make
 sudo make install
 
-cd ./(your workspace)/src
-git clone https://github.com/Livox-SDK/livox_ros_driver.git ws_livox/src
+cd ~/(your workspace)/src
+git clone https://github.com/Livox-SDK/livox_ros_driver.git 
 cd ../
 catkin_make
 
