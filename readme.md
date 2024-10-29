@@ -2,6 +2,7 @@
 このリポジトリは、週末組2024のつくばチャレンジリポジトリです。
 
 ## 環境設定
+
 ### 依存パッケージ
 このパッケージはROS1 noetic, python3で動作し、以下のROSパッケージを必要とします。
 パッケージのインストール方法を各リポジトリを参考にしてください。
@@ -18,6 +19,87 @@ mcl_3dl
 trajectory_tracker
 move_base
 ~~~
+
+### 依存パッケージの導入方法
+
+#### ypspurのインストール
+https://github.com/openspur/yp-spur/blob/master/doc/README.ja.md
+
+#### ypspur rosのインストール
+https://github.com/openspur/ypspur_ros
+
+
+#### urg nodeのインストール
+~~~
+sudo apt install ros-noetic-urg-node
+~~~
+
+#### install livox SDK and livox ros driver2
+
+~~~
+# install livox SDK2
+cd /tmp
+git clone https://github.com/Livox-SDK/Livox-SDK2.git
+cd ./Livox-SDK2/
+mkdir build
+cd build
+cmake .. && make -j
+sudo make install
+
+# install livox ros driver2
+cd ./(your workspace)/src
+git clone https://github.com/Livox-SDK/livox_ros_driver2.git ws_livox/src/livox_ros_driver2
+cd ../
+catkin_make
+~~~
+
+
+#### insall velodyne and move base
+~~~
+sudo apt install ros-noetic-velodyne
+sudo apt install ros-noetic-move-base
+sudo apt install ros-noetic-map-server
+
+~~~
+
+
+#### install tf2 and mcl-3dl 
+~~~
+sudo apt install ros-noetic-geometry2
+cd ./(your workspace)/src
+git clone https://github.com/at-wat/mcl_3dl.git
+git clone https://github.com/at-wat/mcl_3dl_msgs.git
+~~~
+
+
+#### install livox ros driver1 and fastlio
+
+catkin_makeが失敗する場合は何回かcatkin_makeを繰り返す
+
+~~~
+# install livox ros direver 1
+cd /tmp
+git clone https://github.com/Livox-SDK/Livox-SDK.git
+cd Livox-SDK
+cd build && cmake ..
+make
+sudo make install
+
+cd ./(your workspace)/src
+git clone https://github.com/Livox-SDK/livox_ros_driver.git ws_livox/src
+cd ../
+catkin_make
+
+#FAST-LIOの導入
+git clone https://github.com/hku-mars/FAST_LIO.git
+cd FAST_LIO
+git submodule update --init
+cd ../..
+catkin_make
+source devel/setup.bash
+~~~
+
+
 
 
 ### 起動方法
@@ -80,6 +162,12 @@ Lidarデータをもとに自己位置推定を行います。
 
 
 waypoint_file等は環境に合わせて変更してください。また、pcd_fileとして、$(find fast_lio)/PCD/scans_light_noground.pcdが指定されていますが、通常は2-2で生成されるscans_light.pcdを指定してください。cloudcompareのSCFフィルタを適用することで地面成分を除去することで自己位置推定の失敗確率が下がるため、自己位置推定に失敗するようであれば地面成分の除去を実施し、nogroundファイルを作成することを推奨します。
+
+rosbagの情報をもとに自己位置推定をする場合は、以下のパラメータを設定の上、rosbag play XXX.bag --clockとしてください
+
+~~~
+rosparam set /use_sim_time true
+~~~
 
 #### 3_locarization.launch
 説明: ローカリゼーション処理の設定。MCL 3DLやAMCLを利用し、地図上でロボットの位置を追跡します。
