@@ -188,6 +188,7 @@ if __name__ == '__main__':
                         waitCounter_ms = 0
                         break
                     elif pose[2][2]:
+                        waitCounter_ms += waitTime_ms
                         # Line stop flag is True
                         if distance_to_goal <= 0.6:
                             stopFlag = 1
@@ -220,6 +221,8 @@ if __name__ == '__main__':
                 else:
                     # Update waiting status and re-send goal if necessary
                     pub_recog.publish(0)
+
+                    waitCounter_ms += waitTime_ms
 
                     if isGoalError and not isSubGoalActive:
                         # Re-send original goal if there was an error and no sub-goal is active
