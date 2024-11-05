@@ -35,7 +35,7 @@ class TimeOptimalController:
         # 障害物検知のパラメータ
         self.robot_width = 0.6  # ロボットの幅 [m]
         self.safety_distance = 0.8  # 障害物との安全距離 [m]
-        self.min_obstacle_distance = 0.5  # 最小許容距離 [m]
+        self.min_obstacle_distance = 0.5  # 最小許容距離(安全距離バッファ) [m]
         self.obstacle_distance = None  # 前方障害物までの距離
 
         # 現在の状態を保持する変数
@@ -97,25 +97,12 @@ class TimeOptimalController:
         LiDARデータを処理し、前方の障害物との最小距離を更新します（ロボットの速度に基づいた動的安全距離）。
         """
         with self.lock:
-            # 現在の速度を取得
-            current_speed = self.current_velocity.linear.x if self.current_velocity else 0.0
-
-            # 最大減速度（線速度）を設定
-            max_deceleration = self.max_a_v  # 最大減速 [m/s^2]
-            safety_buffer = 0.5  # 安全距離バッファ [m]（50cm手前で停止するように設定）
-
-            # 現在の速度から停止距離を計算し、安全距離を設定
-            if max_deceleration > 0:
-                stopping_distance = (current_speed ** 2) / (2 * max_deceleration) + safety_buffer
-            else:
-                stopping_distance = safety_buffer  # 減速能力がない場合は単にバッファのみ
-
             # ロボットの幅と前方の最大検出距離
             half_width = self.robot_width / 2.0
             max_detection_distance = 5.0  # 障害物検出の最大距離 [m]
 
-            # 有効な範囲内での最小距離を初期化
-            min_obstacle_distance = None
+            # 有効な範囲内での並進方向の最小距離を初期化
+            x_min = None
 
             # 各ビームの距離と角度を処理
             angle_min = msg.angle_min
@@ -129,24 +116,22 @@ class TimeOptimalController:
                 # 各ビームの角度を計算
                 angle = angle_min + i * angle_increment
 
+                # 後方のビームの場合は無視
+                if math.degrees(angle) < -90.0 or math.degrees(angle) > 90.0:
+                    continue
+
                 # ビームの位置をXY平面に変換
                 x = r * math.cos(angle)
                 y = r * math.sin(angle)
 
                 # 前方の長方形領域内にビームが存在するかチェック
-                if 0 <= x <= max_detection_distance and -half_width <= y <= half_width:
+                if 0 < x <= max_detection_distance and -half_width <= y <= half_width:
                     # 障害物が検出された場合、最小距離を更新
-                    if min_obstacle_distance is None or r < min_obstacle_distance:
-                        min_obstacle_distance = r
+                    if x_min is None or x < x_min:
+                        x_min = x
 
             # 更新した障害物までの最小距離を保存
-            self.obstacle_distance = min_obstacle_distance if min_obstacle_distance is not None else None
-
-            # 障害物の距離と停止距離を比較し、停止が必要かどうか判断
-            if self.obstacle_distance is not None and self.obstacle_distance < stopping_distance:
-                rospy.logwarn("Obstacle detected within stopping distance! Distance: {:.2f} m, Stopping Distance: {:.2f} m".format(
-                    self.obstacle_distance, stopping_distance
-                ))
+            self.obstacle_distance = x_min
 
     def quaternion_to_yaw(self, quat):
         """
@@ -227,10 +212,9 @@ class TimeOptimalController:
         # 障害物の距離と停止距離に基づいた速度調整
         if self.obstacle_distance is not None:
             max_deceleration = self.max_a_v
-            safety_buffer = 0.5  # 安全距離バッファ [m]
 
             # 停止距離の計算
-            stopping_distance = (v_current ** 2) / (2 * max_deceleration) + safety_buffer
+            stopping_distance = (v_current ** 2) / (2 * max_deceleration) + self.min_obstacle_distance
 
             # 障害物の距離と停止距離を比較し、速度を減速または停止
             if self.obstacle_distance < stopping_distance:
@@ -252,6 +236,7 @@ class TimeOptimalController:
             if angle_diff <= self.angle_tolerance:
                 w_desired = 0.0
                 self.integral_w = 0
+
 
         # Twistメッセージの生成
         cmd_vel = Twist()
