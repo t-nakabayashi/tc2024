@@ -182,6 +182,12 @@ class TimeOptimalController:
         yaw_error = self.normalize_angle(target_bearing - current_yaw)
         angle_diff = abs(yaw_error)
 
+        # 許容誤差内の場合、角度誤差を目標のベクトル向きと現在のヨー角の差分で上書き
+        if distance_error <= self.position_tolerance:
+            target_yaw = self.quaternion_to_yaw(target_pose.orientation)
+            yaw_error = self.normalize_angle(target_yaw - current_yaw)
+            angle_diff = abs(yaw_error)
+
         # PID制御による角速度の計算
         self.integral_w += yaw_error * self.control_dt
         derivative_w = (yaw_error - self.prev_yaw_error) / self.control_dt
@@ -227,7 +233,10 @@ class TimeOptimalController:
         # 許容誤差内の場合、速度をゼロに設定
         if distance_error <= self.position_tolerance:
             v_desired_scaled = 0.0
-            w_desired = 0.0
+            if angle_diff <= self.angle_tolerance:
+                w_desired = 0.0
+                self.integral_w = 0
+
 
         # Twistメッセージの生成
         cmd_vel = Twist()
