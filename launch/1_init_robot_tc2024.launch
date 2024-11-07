@@ -10,6 +10,7 @@
 	<node pkg="ypspur_ros" type="ypspur_ros" name="ypspur_ros" respawn="true">
 		<param name="port" value="/dev/ttyACM_YP" />
 		<param name="param_file" value="/home/nakaba/icart-middle.param" />
+		<param name="publish_odom_tf" value="false" />
 	</node>
 
 

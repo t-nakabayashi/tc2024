@@ -2,6 +2,10 @@
 	<!--param name="use_sim_time" value="true"/-->
 	<node pkg="tf" type="static_transform_publisher" name="tf_base2mid360_new2" args="-0.425 0 1.005 0 0 0 /base_link /mid360_frame_new 10" />
 
+    <!-- 条件付きTFパブリッシャーノードを起動 -->
+    <node pkg="tc2024" type="conditional_tf_publisher.py" name="conditional_tf_publisher" output="screen">
+    </node>
+
 	<rosparam param="footprint" ns="/move_base/local_costmap">[[0.05,-0.1], [0.05,0.1], [-0.3,0.1], [-0.3,-0.1]]</rosparam>
 	<rosparam param="footprint" ns="/move_base/global_costmap">[[0.05,-0.1], [0.05,0.1], [-0.3,0.1], [-0.3,-0.1]]</rosparam>
 	<arg name="waypoint_file" default="$(find fast_lio)/PCD/waypoint.csv" />
