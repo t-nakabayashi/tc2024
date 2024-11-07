@@ -110,7 +110,7 @@ class TimeOptimalController:
 
             for i, r in enumerate(msg.ranges):
                 # 距離が無限大またはNaNの場合は無視
-                if math.isinf(r) or math.isnan(r) or r < 0.45:
+                if math.isinf(r) or math.isnan(r) or r < 0.2:
                     continue
 
                 # 各ビームの角度を計算
