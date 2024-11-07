@@ -1,8 +1,24 @@
 <launch>
+    <!-- 条件付きTFパブリッシャーノードを起動 -->
+    <node pkg="tc2024" type="conditional_tf_publisher.py" name="conditional_tf_publisher" output="screen">
+		<param name="odom_topic" value="/Odometry" />
+	</node>
+
+	<!-- Launch file for Livox AVIA LiDAR -->
+	<rosparam command="load" file="$(find tc2024)/config/tc2024_mid_local.yaml" />
+
+	<param name="feature_extract_enable" type="bool" value="0"/>
+	<param name="point_filter_num" type="int" value="3"/>
+	<param name="max_iteration" type="int" value="2" />
+	<param name="filter_size_surf" type="double" value="0.5" />
+	<param name="filter_size_map" type="double" value="0.5" />
+	<param name="cube_side_length" type="double" value="1000" />
+	<param name="runtime_pos_log_enable" type="bool" value="0" />
+    <node pkg="fast_lio" type="fastlio_mapping" name="laserMapping" output="screen" />
 	<!--param name="use_sim_time" value="true"/-->
-	<node pkg="tf" type="static_transform_publisher" name="tf_base2mid360_new2" args="-0.425 0 1.005 0 0 0 /base_link /mid360_frame_new 10" />
-	<node pkg="tf" type="static_transform_publisher" name="body2base_link" args="0 0 0 0 0 0 /body /base_link 10" />
-	<node pkg="tf" type="static_transform_publisher" name="odom2camera_init" args="0 0 0 0 0 0 /odom /camera_init 10" />
+	<node pkg="tf" type="static_transform_publisher" name="tf_base2mid360_new2" args="-0.425 0 1.005 0 0 0 /base_link /mid360_frame_new 50" />
+	<!--node pkg="tf" type="static_transform_publisher" name="body2base_link" args="0 0 0 0 0 0 /body /base_link 50" /-->
+	<!--node pkg="tf" type="static_transform_publisher" name="odom2camera_init" args="0 0 0 0 0 0 /odom /camera_init 50" /-->
 
 	<rosparam param="footprint" ns="/move_base/local_costmap">[[0.05,-0.1], [0.05,0.1], [-0.3,0.1], [-0.3,-0.1]]</rosparam>
 	<rosparam param="footprint" ns="/move_base/global_costmap">[[0.05,-0.1], [0.05,0.1], [-0.3,0.1], [-0.3,-0.1]]</rosparam>
@@ -79,18 +95,6 @@
 	  </node>
 
 
-	<node pkg="move_base" type="move_base" respawn="false" name="move_base">
-		<rosparam file="$(find tc2024)/config/move_base.yaml" command="load" />
-		<rosparam file="$(find tc2024)/config/costmap_common.yaml" command="load" ns="global_costmap" />
-		<rosparam file="$(find tc2024)/config/costmap_common.yaml" command="load" ns="local_costmap" />
-		<rosparam file="$(find tc2024)/config/costmap_local.yaml" command="load" />
-		<rosparam file="$(find tc2024)/config/costmap_global.yaml" command="load" />
-		<rosparam file="$(find tc2024)/config/planner_local.yaml" command="load" />
-		<rosparam file="$(find tc2024)/config/planner_global.yaml" command="load" />
-		<remap from="cmd_vel" to="ypspur_ros/cmd_vel_move" />
-    <remap from="odom" to="ypspur_ros/odom" />
-		<!--remap from="map" to="map_move" /-->
-	</node>
 
 	<!--node pkg="tc2024" name="waypoint_manager" type="waypoint_manager.py">
 		<param name="start_num"	value="0"/>
@@ -112,6 +116,5 @@
 	<!--Lidarデータの統合スクリプトを起動 -->
 	<node pkg="tc2024" name="marge_lidar_data" type="marge_lidar_data.py">
 	</node>
-
 
 </launch>

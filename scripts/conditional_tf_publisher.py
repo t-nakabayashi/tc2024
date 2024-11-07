@@ -11,8 +11,11 @@ class ConditionalTFPublisher:
         # 初期化
         rospy.init_node('conditional_tf_publisher')
 
-        # ypspur_ros/odomから情報を取得するための購読
-        self.odom_sub = rospy.Subscriber('/ypspur_ros/odom', Odometry, self.odom_callback)
+        # オドメトリトピック名をパラメータから取得（デフォルトは /ypspur_ros/odom）
+        odom_topic = rospy.get_param('~odom_topic', '/ypspur_ros/odom')
+
+        # 指定されたオドメトリトピックを購読
+        self.odom_sub = rospy.Subscriber(odom_topic, Odometry, self.odom_callback)
 
         # 10Hzでパブリッシュするためのタイマー
         self.publish_rate = rospy.Rate(10)
@@ -23,19 +26,16 @@ class ConditionalTFPublisher:
         # オドメトリデータを保持する変数
         self.odom_data = None
 
-
     def odom_callback(self, msg):
-        """ypspur_ros/odomトピックからオドメトリデータを取得"""
+        """オドメトリトピックからデータを取得"""
         self.odom_data = msg
 
-
     def publish_tf(self):
-        """ypspur_ros/odomのデータを基にTFをパブリッシュ"""
+        """オドメトリデータを基にTFをパブリッシュ"""
         if not self.odom_data:
             return
 
         odom = self.odom_data
-
 
         # TransformStampedメッセージを作成
         transform = TransformStamped()
@@ -57,7 +57,6 @@ class ConditionalTFPublisher:
         """メインループ"""
         while not rospy.is_shutdown():
             self.publish_tf()
-
             self.publish_rate.sleep()
 
 if __name__ == '__main__':

@@ -4,6 +4,7 @@
 
     <!-- 条件付きTFパブリッシャーノードを起動 -->
     <node pkg="tc2024" type="conditional_tf_publisher.py" name="conditional_tf_publisher" output="screen">
+		<param name="odom_topic" value="/ypspur_ros/odom" />
     </node>
 
 	<rosparam param="footprint" ns="/move_base/local_costmap">[[0.05,-0.1], [0.05,0.1], [-0.3,0.1], [-0.3,-0.1]]</rosparam>
