@@ -1,13 +1,17 @@
 <launch>
-	<arg name="waypoint_file" default="$(find fast_lio)/PCD/waypoint.csv" />
+    <!-- 引数の定義: start_num -->
+    <arg name="start_num" default="1" /> <!-- デフォルト値を 1 に設定 -->
 
-	<node pkg="tc2024" name="waypoint_manager" type="waypoint_manager.py" output="screen" >
-		<param name="start_num"	value="2"/>
-		<param name="waypoint"             value="$(arg waypoint_file)"/>
-	</node>
+    <!-- 引数の定義: waypoint_file -->
+    <arg name="waypoint_file" default="$(find fast_lio)/PCD/waypoint.csv" />
 
+    <!-- waypoint_managerノードの定義 -->
+    <node pkg="tc2024" name="waypoint_manager" type="waypoint_manager.py" output="screen" >
+        <param name="start_num" value="$(arg start_num)" /> <!-- 引数をパラメータに渡す -->
+        <param name="waypoint" value="$(arg waypoint_file)" />
+    </node>
 
-	<node pkg="tc2024" name="navigator" type="navigator.py" output="screen" >
-	</node>
-
+    <!-- navigatorノードの定義 -->
+    <node pkg="tc2024" name="navigator" type="navigator.py" output="screen" >
+    </node>
 </launch>
