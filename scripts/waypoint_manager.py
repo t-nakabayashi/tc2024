@@ -14,6 +14,8 @@ from geometry_msgs.msg import Vector3
 from geometry_msgs.msg import Twist
 import random
 from std_msgs.msg import Int32
+import numpy as np
+from sensor_msgs.msg import LaserScan
 
 # List of waypoints to navigate
 waypoints = []
@@ -27,6 +29,11 @@ stopFlag = 0
 boostFlag = 0
 # Flag to indicate if robot is moving towards a sub-goal
 isSubGoalActive = False
+# List of pointcloud data
+pointcloud = np.empty((0, 2))
+# offset for obstacle avoidance
+offset_l = 0.0
+offset_r = 0.0
 
 # Publishers to control robot velocity and initialize position
 pub_vel = rospy.Publisher("/ypspur_ros/cmd_vel", Twist, queue_size=10)
@@ -114,6 +121,79 @@ def mclposeCallBack(data):
     pose_x = data.pose.pose.position.x
     pose_y = data.pose.pose.position.y
 
+def laserScanCallback(data):
+    """
+    LiDARデータを処理し、前方の障害物を回避するための左右の最小オフセット距離を更新します。
+    """
+    # 各ビームの距離と角度を処理
+    angle_min = data.angle_min
+    angle_increment = data.angle_increment
+
+    xy = np.empty((0, 2))
+    for i, r in enumerate(data.ranges):
+        # 距離が無限大またはNaNの場合は無視
+        if math.isinf(r) or math.isnan(r) or r < 0.45:
+            continue
+
+        # 各ビームの角度を計算
+        angle = angle_min + i * angle_increment
+
+        # 後方のビームの場合は無視
+        if math.degrees(angle) < -90.0 or math.degrees(angle) > 90.0:
+            continue
+
+        # ビームの位置をXY平面に変換
+        x = r * math.cos(angle)
+        y = r * math.sin(angle)
+        xy = np.append(xy, np.array([[x,y]]), axis=0)
+
+    # 参照用のグローバル変数に点群情報をコピー(本当は排他した方が良い)
+    pointcloud = xy.copy()
+
+    # ロボットの幅 [m]
+    robot_width = 0.6  
+    half_width = robot_width / 2.0
+    # 回避対象障害物の最大距離 [m]
+    max_obstacle_distance = 1.5
+
+    # 点群データがある場合
+    if len(xy) > 0:
+        # x方向の距離から回避対象の障害物を抽出
+        xy_extract = xy[xy[:,0] <= max_obstacle_distance]
+        # x軸を境に左右の点群に分割
+        xy_extract_l = xy_extract[xy_extract[:,1] > 0.0]
+        xy_extract_r = xy_extract[xy_extract[:,1] < 0.0]   #ここで右側の点群が抽出できていない
+        # 左右の点群をy方向の距離でソート
+        xy_extract_l = sorted(xy_extract_l, key=lambda c: c[1])
+        xy_extract_r = sorted(xy_extract_r, key=lambda c: c[1], reverse=True)
+        # 始点をx軸上(y=0)として、始点に近い方から順に隣の点とのy方向の距離を算出し障害物の端を探す
+        offset_l = y = y_prev = 0.0
+        for i in range(len(xy_extract_l)):
+            y = abs(xy_extract_l[i][1])
+            # 隣の点との間がロボットの幅よりも開いている場合
+            if y - y_prev > robot_width:
+                # 車幅半分のマージンを設けてオフセットを算出
+                offset = y_prev + (robot_width + half_width)
+                if 1.0 < offset < 3.0:
+                    # 前方の障害物を回避するための左オフセット距離(左側)
+                    offset_l = offset
+                    break
+            y_prev = y
+        # 始点をx軸上(y=0)として、始点に近い方から順に隣の点とのy方向の距離を算出し障害物の端を探す
+        offset_r = y = y_prev = 0.0
+        for i in range(len(xy_extract_r)):
+            y = abs(xy_extract_r[i][1])
+            # 隣の点との間がロボットの幅よりも開いている場合
+            if y - y_prev > robot_width:
+                # 車幅半分のマージンを設けてオフセットを算出
+                offset = y_prev + (robot_width + half_width)
+                if 1.0 < offset < 3.0:
+                    # 前方の障害物を回避するための左オフセット距離(右側)
+                    offset_r = offset
+                    break
+            y_prev = y
+    #print("offset_l", offset_l, "offset_r", offset_r)
+    
 if __name__ == '__main__':
     rospy.init_node('patrol')  # Initialize the patrol node
 
@@ -135,6 +215,7 @@ if __name__ == '__main__':
     rospy.Subscriber('/move_base/status', GoalStatus, goalstatusCallBack)
     rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, mclposeCallBack)
     rospy.Subscriber('/ypspur_ros/cmd_vel_old', Twist, velCallBack)
+    rospy.Subscriber('/scan_livox_front_low_move', LaserScan, laserScanCallback)
 
     # Read the waypoints from the CSV file
     with open(waypoint_name, 'r') as f:
@@ -221,9 +302,7 @@ if __name__ == '__main__':
                 else:
                     # Update waiting status and re-send goal if necessary
                     pub_recog.publish(0)
-
                     waitCounter_ms += waitTime_ms
-
                     if isGoalError and not isSubGoalActive:
                         # Re-send original goal if there was an error and no sub-goal is active
                         client.send_goal(original_goal)
@@ -237,16 +316,25 @@ if __name__ == '__main__':
                         # After 20 seconds, if no progress, create a sub-goal 1m to the open side
                         theta = quaternion_to_euler(pose[1][0], pose[1][1], pose[1][2], pose[1][3])
                         if int(pose[2][1]) == 1:
+                            print("offset_l", offset_l, "offset_r", offset_r)
                             # If left is open, create a sub-goal 1m to the left
                             print("create sub-goal L")
-                            goal.target_pose.pose.position.x = pose_x + math.cos(theta.z + 1.57078) * 1.0
-                            goal.target_pose.pose.position.y = pose_y + math.sin(theta.z + 1.57078) * 1.0
+                            if 0.0 < offset_l:
+                                goal.target_pose.pose.position.x = pose_x + math.cos(theta.z + 1.57078) * offset_l
+                                goal.target_pose.pose.position.y = pose_y + math.sin(theta.z + 1.57078) * offset_l
+                            else:
+                                goal.target_pose.pose.position.x = pose_x + math.cos(theta.z + 1.57078) * 1.0
+                                goal.target_pose.pose.position.y = pose_y + math.sin(theta.z + 1.57078) * 1.0
                             isSubGoalActive = True
                         elif int(pose[2][0]) == 1:
                             # If right is open, create a sub-goal 1m to the right
                             print("create sub-goal R")
-                            goal.target_pose.pose.position.x = pose_x + math.cos(theta.z - 1.57078) * 1.0
-                            goal.target_pose.pose.position.y = pose_y + math.sin(theta.z - 1.57078) * 1.0
+                            if 0.0 < offset_r:
+                                goal.target_pose.pose.position.x = pose_x + math.cos(theta.z + 1.57078) * offset_r
+                                goal.target_pose.pose.position.y = pose_y + math.sin(theta.z + 1.57078) * offset_r
+                            else:
+                                goal.target_pose.pose.position.x = pose_x + math.cos(theta.z - 1.57078) * 1.0
+                                goal.target_pose.pose.position.y = pose_y + math.sin(theta.z - 1.57078) * 1.0
                             isSubGoalActive = True
 
                         # Send the sub-goal
