@@ -135,4 +135,8 @@
 	<node pkg="tc2024" name="flag_maker" type="flag_maker.py" output="screen" >
 	</node>
 
+	<node pkg="tc2024" name="waypoint_gui" type="waypoint_gui.py" output="screen" >
+	</node>
+
+
 </launch>
