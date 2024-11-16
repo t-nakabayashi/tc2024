@@ -121,6 +121,69 @@ def mclposeCallBack(data):
     pose_x = data.pose.pose.position.x
     pose_y = data.pose.pose.position.y
 
+def laserScanViewer(window_name, points, vline_l, vline_r, robot_width, half_width, max_obstacle_distance):
+    # 画面表示用画像の生成
+    map_range = 8.0 #[m]
+    x_min = 0.0
+    x_max = (map_range/2) * 2
+    y_min = -1.0 * (map_range/2)
+    y_max = (map_range/2)
+    pixel_pitch = 100 #[pix/m]
+    width = int((y_max - y_min) * pixel_pitch) #[pix]
+    height = int((x_max - x_min) * pixel_pitch) #[pix]
+    grid_map = np.zeros((height, width, 3))
+    grid_map += 255
+
+    pix_x = int(width / 2) - int(robot_width * pixel_pitch)
+    cv2.line(grid_map, (pix_x, height), (pix_x, 0), (0, 0, 0), thickness=2, lineType=cv2.LINE_AA)
+    pix_x = int(width / 2) + int(robot_width * pixel_pitch)
+    cv2.line(grid_map, (pix_x, height), (pix_x, 0), (0, 0, 0), thickness=2, lineType=cv2.LINE_AA)
+    pix_y = height - int(max_obstacle_distance * pixel_pitch)
+    cv2.line(grid_map, (0, pix_y), (width, pix_y), (0, 0, 0), thickness=2, lineType=cv2.LINE_AA)
+    for i in range(len(points)):
+        x = points[i][0]
+        y = points[i][1]
+        if x_min < x < x_max and y_min < y < y_max:
+            pix_x = int(width / 2) - int(y * pixel_pitch)
+            pix_y = height - int(x * pixel_pitch)
+            if 0 <= pix_x < width and 0 <= pix_y < height:
+                cv2.circle(grid_map, (pix_x, pix_y), 4, (0, 0, 255), -1)
+    pix_x = int(width / 2) - int(vline_l * pixel_pitch)
+    if vline_l != 0.0 and 0 <= pix_x:
+        cv2.line(grid_map, (pix_x, height), (pix_x, 0), (255, 0, 0), thickness=2, lineType=cv2.LINE_AA)
+    pix_x = int(width / 2) - int(vline_r * pixel_pitch)
+    if vline_r != 0.0 and 0 <= pix_x:
+        cv2.line(grid_map, (pix_x, height), (pix_x, 0), (255, 0, 0), thickness=2, lineType=cv2.LINE_AA)
+    grid_map_show = cv2.resize(grid_map, (500,500))
+    cv2.imshow(window_name, grid_map_show)
+    cv2.waitKey(1)
+
+def calcAvoidanceOffset(xy, robot_width, half_width):
+    # 始点をx軸上(y=0)として、始点に近い方から順に隣の点とのy方向の距離を算出し障害物の端を探す
+    offset = y = y_prev = 0.0
+    for i in range(len(xy)):
+        y = abs(xy[i][1])
+        # 隣の点との間がロボットの幅+車幅半分のマージンよりも開いている場合
+        if y - y_prev > (robot_width + half_width):
+            # 車幅半分のマージンを設けてオフセットを算出
+            offset = y_prev + (robot_width + half_width)/2.0
+            # ロボットの直進経路上(左/右半分)に障害物がない場合
+            if y_prev == 0.0:
+                # 避ける必要なし
+                offset = 0.0
+                break
+            if offset < 3.0:
+                # 前方の障害物を回避するためのオフセット距離として採用
+                break
+        # 外側に点が存在しない場合
+        elif i == len(xy) - 1:
+            offset = y + (robot_width + half_width)/2.0
+            if offset < 3.0:
+                # 前方の障害物を回避するためのオフセット距離として採用
+                break
+        y_prev = y
+    return offset
+
 def laserScanCallback(data):
     """
     LiDARデータを処理し、前方の障害物を回避するための左右の最小オフセット距離を更新します。
@@ -132,7 +195,7 @@ def laserScanCallback(data):
     xy = np.empty((0, 2))
     for i, r in enumerate(data.ranges):
         # 距離が無限大またはNaNの場合は無視
-        if math.isinf(r) or math.isnan(r) or r < 0.45:
+        if math.isinf(r) or math.isnan(r) or r < 0.2:
             continue
 
         # 各ビームの角度を計算
@@ -162,37 +225,15 @@ def laserScanCallback(data):
         xy_extract = xy[xy[:,0] <= max_obstacle_distance]
         # x軸を境に左右の点群に分割
         xy_extract_l = xy_extract[xy_extract[:,1] > 0.0]
-        xy_extract_r = xy_extract[xy_extract[:,1] < 0.0]   #ここで右側の点群が抽出できていない
+        xy_extract_r = xy_extract[xy_extract[:,1] < 0.0]
         # 左右の点群をy方向の距離でソート
         xy_extract_l = sorted(xy_extract_l, key=lambda c: c[1])
         xy_extract_r = sorted(xy_extract_r, key=lambda c: c[1], reverse=True)
         # 始点をx軸上(y=0)として、始点に近い方から順に隣の点とのy方向の距離を算出し障害物の端を探す
-        offset_l = y = y_prev = 0.0
-        for i in range(len(xy_extract_l)):
-            y = abs(xy_extract_l[i][1])
-            # 隣の点との間がロボットの幅よりも開いている場合
-            if y - y_prev > robot_width:
-                # 車幅半分のマージンを設けてオフセットを算出
-                offset = y_prev + (robot_width + half_width)
-                if 1.0 < offset < 3.0:
-                    # 前方の障害物を回避するための左オフセット距離(左側)
-                    offset_l = offset
-                    break
-            y_prev = y
-        # 始点をx軸上(y=0)として、始点に近い方から順に隣の点とのy方向の距離を算出し障害物の端を探す
-        offset_r = y = y_prev = 0.0
-        for i in range(len(xy_extract_r)):
-            y = abs(xy_extract_r[i][1])
-            # 隣の点との間がロボットの幅よりも開いている場合
-            if y - y_prev > robot_width:
-                # 車幅半分のマージンを設けてオフセットを算出
-                offset = y_prev + (robot_width + half_width)
-                if 1.0 < offset < 3.0:
-                    # 前方の障害物を回避するための左オフセット距離(右側)
-                    offset_r = offset
-                    break
-            y_prev = y
+        offset_l = calcAvoidanceOffset(xy_extract_l, robot_width, half_width)
+        offset_r = calcAvoidanceOffset(xy_extract_r, robot_width, half_width)
     #print("offset_l", offset_l, "offset_r", offset_r)
+    #laserScanViewer("laserscan", pointcloud, offset_l, -1.0 * offset_r, robot_width, half_width, max_obstacle_distance)
     
 if __name__ == '__main__':
     rospy.init_node('patrol')  # Initialize the patrol node
