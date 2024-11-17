@@ -171,7 +171,7 @@ def calcAvoidanceOffset(xy, robot_width, half_width):
             # ロボットの直進経路上(左/右半分)に障害物がない場合
             if y_prev == 0.0:
                 # 避ける必要なし
-                offset = 0.0
+                #offset = 0.0
                 break
             if offset < 3.0:
                 # 前方の障害物を回避するためのオフセット距離として採用
@@ -189,6 +189,8 @@ def laserScanCallback(data):
     """
     LiDARデータを処理し、前方の障害物を回避するための左右の最小オフセット距離を更新します。
     """
+    global offset_l,offset_r
+
     # 各ビームの距離と角度を処理
     angle_min = data.angle_min
     angle_increment = data.angle_increment
@@ -233,7 +235,7 @@ def laserScanCallback(data):
         # 始点をx軸上(y=0)として、始点に近い方から順に隣の点とのy方向の距離を算出し障害物の端を探す
         offset_l = calcAvoidanceOffset(xy_extract_l, robot_width, half_width)
         offset_r = calcAvoidanceOffset(xy_extract_r, robot_width, half_width)
-    print("offset_l", offset_l, "offset_r", offset_r)
+    #print("offset_l", offset_l, "offset_r", offset_r)
     laserScanViewer("laserscan", pointcloud, offset_l, -1.0 * offset_r, robot_width, half_width, max_obstacle_distance)
     
 if __name__ == '__main__':
@@ -249,15 +251,17 @@ if __name__ == '__main__':
     start_num = rospy.get_param("~start_num", 0)
     waypoint_name = rospy.get_param("~waypoint", '/home/nakaba/map/waypoint_tsukuba2023.csv')
 
+
+    # Set up the action client for move_base
+    client = actionlib.SimpleActionClient('move_base', MoveBaseAction)
+    client.wait_for_server()
+
     # Subscribe to relevant topics
     rospy.Subscriber('/move_base/status', GoalStatus, goalstatusCallBack)
     rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, mclposeCallBack)
     rospy.Subscriber('/ypspur_ros/cmd_vel_old', Twist, velCallBack)
     rospy.Subscriber('/scan_livox_front_low_move', LaserScan, laserScanCallback)
 
-    # Set up the action client for move_base
-    client = actionlib.SimpleActionClient('move_base', MoveBaseAction)
-    client.wait_for_server()
 
     # Read the waypoints from the CSV file
     with open(waypoint_name, 'r') as f:
@@ -364,9 +368,11 @@ if __name__ == '__main__':
                             if 0.0 < offset_l:
                                 goal.target_pose.pose.position.x = pose_x + math.cos(theta.z + 1.57078) * offset_l
                                 goal.target_pose.pose.position.y = pose_y + math.sin(theta.z + 1.57078) * offset_l
+                                print(offset_l)
                             else:
-                                goal.target_pose.pose.position.x = pose_x + math.cos(theta.z + 1.57078) * 1.0
-                                goal.target_pose.pose.position.y = pose_y + math.sin(theta.z + 1.57078) * 1.0
+                                goal.target_pose.pose.position.x = pose_x + math.cos(theta.z + 1.57078) * 0.5
+                                goal.target_pose.pose.position.y = pose_y + math.sin(theta.z + 1.57078) * 0.5
+                                print("nooffset" + str(offset_l))
                             isSubGoalActive = True
                         elif int(pose[2][0]) == 1:
                             # If right is open, create a sub-goal 1m to the right
