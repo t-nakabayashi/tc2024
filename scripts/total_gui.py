@@ -4,11 +4,12 @@ import tkinter as tk
 import subprocess
 import time
 import signal
+import threading  # 条件チェックの並行処理
 import atexit  # プログラム終了時の処理を追加
 
 # 各launchファイルの情報
-LOCARIZATION_LAUNCH = ["roslaunch", "tc2024", "3-1_locarization_fastlio.launch"]
-NAVIGATION_LAUNCH_TEMPLATE = ["roslaunch", "tc2024", "4_run.launch", "start_num:="]
+LOCARIZATION_LAUNCH = ["roslaunch", "tc2024", "3-1_locarization_fastlio_1st.launch"]
+NAVIGATION_LAUNCH_TEMPLATE = ["roslaunch", "tc2024", "4_run_1st.launch", "start_num:="]
 LOCARIZATION_NEXT_LAUNCH = ["roslaunch", "tc2024", "3-1_locarization_fastlio_next.launch"]
 NAVIGATION_NEXT_LAUNCH = ["roslaunch", "tc2024", "4_run_next.launch"]
 
@@ -39,7 +40,7 @@ def stop_all_launches():
     for name, process in processes.items():
         if process.poll() is None:
             print(f"Force stopping {name}...")
-            process.send_signal(signal.SIGINT)  # SIGINTを送信
+            process.send_signal(signal.SIGINT)
             try:
                 process.wait(timeout=5)  # 正常終了を待つ
             except subprocess.TimeoutExpired:
@@ -50,16 +51,13 @@ def stop_all_launches():
 # プログラム終了時にすべてのlaunchファイルを停止
 atexit.register(stop_all_launches)
 
-def wait_for_all_stopped(names):
-    """全てのプロセスが停止するまで待機"""
-    for name in names:
-        if name in processes:
-            while processes[name].poll() is None:
-                print(f"Waiting for {name} to stop...")
-                time.sleep(1)
-
 def start_locarization():
     start_launch("locarization", LOCARIZATION_LAUNCH)
+
+def restart_locarization():
+    """ローカライゼーションの再起動"""
+    stop_launch("locarization")
+    start_launch("locarization", LOCARIZATION_NEXT_LAUNCH)
 
 def stop_locarization():
     stop_launch("locarization")
@@ -74,20 +72,37 @@ def start_navigation_with_waypoint():
     navigation_command = NAVIGATION_LAUNCH_TEMPLATE + [f"start_num:={waypoint}"]
     start_launch("navigation", navigation_command)
 
+def restart_navigation():
+    """ナビゲーションの再起動"""
+    stop_launch("navigation")
+    start_navigation_with_waypoint()
+
 def stop_navigation():
     stop_launch("navigation")
 
-def change_map():
-    # ローカライゼーションとナビゲーションの停止
-    stop_launch("locarization")
-    stop_launch("navigation")
+def condition_based_restart():
+    """特定条件に基づいて再起動を実行"""
+    while True:
+        if check_condition_locarization():
+            print("Condition met for locarization restart.")
+            restart_locarization()
+        if check_condition_navigation():
+            print("Condition met for navigation restart.")
+            restart_navigation()
+        time.sleep(5)  # 条件を5秒間隔でチェック
 
-    # 両方の停止を確認
-    wait_for_all_stopped(["locarization", "navigation"])
+def check_condition_locarization():
+    """ローカライゼーション再起動の条件チェック（ダミー実装）"""
+    # 条件ロジックをここに実装
+    return False  # 常にFalse（条件が満たされる場合のみTrueに変更）
 
-    # 次のマップ用のlaunchファイルを起動
-    start_launch("locarization_next", LOCARIZATION_NEXT_LAUNCH)
-    start_launch("navigation_next", NAVIGATION_NEXT_LAUNCH)
+def check_condition_navigation():
+    """ナビゲーション再起動の条件チェック（ダミー実装）"""
+    # 条件ロジックをここに実装
+    return False  # 常にFalse（条件が満たされる場合のみTrueに変更）
+
+# 条件チェックをバックグラウンドで実行
+threading.Thread(target=condition_based_restart, daemon=True).start()
 
 # GUIの構築
 root = tk.Tk()
@@ -100,10 +115,12 @@ root.attributes("-topmost", True)
 # ボタン1: Locarization
 locarization_frame = tk.Frame(root)
 locarization_frame.pack(pady=10, anchor="w")
-locarization_button = tk.Button(locarization_frame, text="Start Locarization", command=start_locarization, width=20)
-locarization_button.pack(side="left", padx=5)
+start_locarization_button = tk.Button(locarization_frame, text="Start Locarization", command=start_locarization, width=20)
+start_locarization_button.pack(side="left", padx=5)
 stop_locarization_button = tk.Button(locarization_frame, text="Stop Locarization", command=stop_locarization, width=20)
 stop_locarization_button.pack(side="left", padx=5)
+restart_locarization_button = tk.Button(locarization_frame, text="Restart Locarization", command=restart_locarization, width=20)
+restart_locarization_button.pack(side="left", padx=5)
 
 # ウェイポイント番号入力
 waypoint_frame = tk.Frame(root)
@@ -117,16 +134,12 @@ waypoint_entry.pack(side="left", padx=5)
 # ボタン2: Navigation
 navigation_frame = tk.Frame(root)
 navigation_frame.pack(pady=10, anchor="w")
-navigation_button = tk.Button(navigation_frame, text="Start Navigation", command=start_navigation_with_waypoint, width=20)
-navigation_button.pack(side="left", padx=5)
+start_navigation_button = tk.Button(navigation_frame, text="Start Navigation", command=start_navigation_with_waypoint, width=20)
+start_navigation_button.pack(side="left", padx=5)
 stop_navigation_button = tk.Button(navigation_frame, text="Stop Navigation", command=stop_navigation, width=20)
 stop_navigation_button.pack(side="left", padx=5)
-
-# ボタン3: Change Map
-change_map_frame = tk.Frame(root)
-change_map_frame.pack(pady=10, anchor="w")
-change_map_button = tk.Button(change_map_frame, text="Change Map", command=change_map, width=20)
-change_map_button.pack(side="left", padx=5)
+restart_navigation_button = tk.Button(navigation_frame, text="Restart Navigation", command=restart_navigation, width=20)
+restart_navigation_button.pack(side="left", padx=5)
 
 # プログラム終了時のフック（GUIが閉じられた際にも呼ばれる）
 root.protocol("WM_DELETE_WINDOW", lambda: (stop_all_launches(), root.destroy()))

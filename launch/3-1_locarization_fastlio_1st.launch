@@ -22,9 +22,9 @@
 
 	<rosparam param="footprint" ns="/move_base/local_costmap">[[0.05,-0.1], [0.05,0.1], [-0.3,0.1], [-0.3,-0.1]]</rosparam>
 	<rosparam param="footprint" ns="/move_base/global_costmap">[[0.05,-0.1], [0.05,0.1], [-0.3,0.1], [-0.3,-0.1]]</rosparam>
-	<arg name="waypoint_file" default="$(find fast_lio)/PCD/tsukuba_next/waypoint.csv" />
-	<arg name="map_file_move" default="$(find fast_lio)/PCD/tsukuba_next/scans_cleaned_2d.yaml" />
-	<arg name="pcd_file" default="$(find fast_lio)/PCD/tsukuba_next/scans_light_noground_edit.pcd" />
+	<arg name="waypoint_file" default="$(find fast_lio)/PCD/tsukuba_1st/waypoint.csv" />
+	<arg name="map_file_move" default="$(find fast_lio)/PCD/tsukuba_1st/scans_cleaned_2d.yaml" />
+	<arg name="pcd_file" default="$(find fast_lio)/PCD/tsukuba_1st/scans_light_noground_edit.pcd" />
 	<node respawn="true" name="map_server_move" pkg="map_server" type="map_server" args="$(arg map_file_move)">
 			<remap from="map" to="/map"/>
 	</node>
