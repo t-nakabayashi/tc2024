@@ -22,7 +22,7 @@ original_points = np.asarray(pcd.points)
 
 # まずは元データからランダムに10%の点を選択
 num_points = original_points.shape[0]
-sampled_indices = np.random.choice(num_points, size=num_points // 10, replace=False)
+sampled_indices = np.random.choice(num_points, size=num_points // 3, replace=False)
 sampled_points = original_points[sampled_indices]
 
 # ランダムサンプリングした点群を新しいPCDファイルとして保存
