@@ -4,8 +4,10 @@ import tkinter as tk
 import subprocess
 import time
 import signal
-import threading  # 条件チェックの並行処理
-import atexit  # プログラム終了時の処理を追加
+import threading
+import atexit
+import rospy  # 追加：ROSパッケージのインポート
+from std_msgs.msg import Int32  # 追加：メッセージ型のインポート
 
 # 各launchファイルの情報
 LOCARIZATION_LAUNCH = ["roslaunch", "tc2024", "3-1_locarization_fastlio_1st.launch"]
@@ -104,10 +106,21 @@ def check_condition_navigation():
 # 条件チェックをバックグラウンドで実行
 threading.Thread(target=condition_based_restart, daemon=True).start()
 
+# 追加：ROSノードの初期化（disable_signals=Trueでシグナルを無効化）
+rospy.init_node('gui_node', anonymous=True, disable_signals=True)
+
+# 追加：パブリッシャーの作成
+manual_start_pub = rospy.Publisher('/manual_start', Int32, queue_size=1)
+
+def send_manual_start():
+    """手動再開のメッセージを送信"""
+    manual_start_pub.publish(1)
+    print("Manual start signal sent.")
+
 # GUIの構築
 root = tk.Tk()
 root.title("ROS Launch Manager")
-root.geometry("500x300")  # ウィンドウサイズを少し広く設定
+root.geometry("600x300")  # ウィンドウサイズを少し広く設定
 
 # GUIを常に最前面に設定
 root.attributes("-topmost", True)
@@ -140,6 +153,12 @@ stop_navigation_button = tk.Button(navigation_frame, text="Stop Navigation", com
 stop_navigation_button.pack(side="left", padx=5)
 restart_navigation_button = tk.Button(navigation_frame, text="Restart Navigation", command=restart_navigation, width=20)
 restart_navigation_button.pack(side="left", padx=5)
+
+# 追加：手動再開ボタンの追加
+manual_start_frame = tk.Frame(root)
+manual_start_frame.pack(pady=10, anchor="w")
+manual_start_button = tk.Button(manual_start_frame, text="Manual Start", command=send_manual_start, width=20, bg='green', fg='white')
+manual_start_button.pack(side="left", padx=5)
 
 # プログラム終了時のフック（GUIが閉じられた際にも呼ばれる）
 root.protocol("WM_DELETE_WINDOW", lambda: (stop_all_launches(), root.destroy()))

@@ -36,6 +36,9 @@ pointcloud = np.empty((0, 2))
 offset_l = 0.0
 offset_r = 0.0
 
+# 追加：手動再開フラグの初期化
+manual_start_flag = 0
+
 # Publishers to control robot velocity and initialize position
 pub_vel = rospy.Publisher("/ypspur_ros/cmd_vel", Twist, queue_size=10)
 pub_init = rospy.Publisher('initialpose', PoseWithCovarianceStamped, queue_size=10)
@@ -237,7 +240,12 @@ def laserScanCallback(data):
         offset_r = calcAvoidanceOffset(xy_extract_r, robot_width, half_width)
     #print("offset_l", offset_l, "offset_r", offset_r)
     laserScanViewer("laserscan", pointcloud, offset_l, -1.0 * offset_r, robot_width, half_width, max_obstacle_distance)
-    
+
+# 追加：手動再開のコールバック関数
+def manual_start_callback(data):
+    global manual_start_flag
+    manual_start_flag = data.data  # データをフラグに格納
+
 if __name__ == '__main__':
     rospy.init_node('patrol')  # Initialize the patrol node
 
@@ -262,6 +270,8 @@ if __name__ == '__main__':
     rospy.Subscriber('/ypspur_ros/cmd_vel_old', Twist, velCallBack)
     rospy.Subscriber('/scan_livox_front_low_move', LaserScan, laserScanCallback)
 
+    # 追加：手動再開トピックの購読
+    rospy.Subscriber('/manual_start', Int32, manual_start_callback)
 
     # Read the waypoints from the CSV file
     with open(waypoint_name, 'r') as f:
@@ -301,6 +311,9 @@ if __name__ == '__main__':
 
             original_goal = goal_pose(pose)  # Store the original goal
 
+            # Reset manual start flag
+            manual_start_flag = 0  # 追加：手動再開フラグをリセット
+
             # Wait until the goal is reached or some condition is met
             while not rospy.is_shutdown():
                 if int(pose[3]) < 1:
@@ -320,8 +333,11 @@ if __name__ == '__main__':
                         if distance_to_goal <= 0.6:
                             stopFlag = 1
                             print("wait!!")
-                            input_data = input()  # Wait for user input to continue
+                            # input()待ちの処理を手動再開待ちに変更
+                            while manual_start_flag != 1 and not rospy.is_shutdown():
+                                rospy.sleep(0.1)
                             stopFlag = 0
+                            manual_start_flag = 0  # フラグをリセット
                             waitCounter_ms = 0
                             break
                     elif pose[2][3]:
@@ -330,7 +346,7 @@ if __name__ == '__main__':
                             print("signal!!!")
                             stopFlag = 1
                             recog = 0
-                            while recog != 1:
+                            while recog != 1 and manual_start_flag != 1 and not rospy.is_shutdown():
                                 pub_recog.publish(1)
                                 try:
                                     recog_data = rospy.wait_for_message('sig_recog', Int32, timeout=1)
@@ -341,8 +357,10 @@ if __name__ == '__main__':
                                 except:
                                     print("sig_recog didn't come....")
                                     recog = 0
+                                rospy.sleep(0.1)  # 追加：スリープを挿入
 
                             stopFlag = 0
+                            manual_start_flag = 0  # フラグをリセット
                             waitCounter_ms = 0
                             break
                 else:
@@ -355,7 +373,7 @@ if __name__ == '__main__':
 
                     if waitCounter_ms % 5000 == 0 and not isSubGoalActive:
                         # Re-send the original goal every 1 second if no sub-goal is active
-                        #print("Resending original goal...")
+                        # print("Resending original goal...")
                         client.send_goal(original_goal)
 
                     if waitCounter_ms % 20000 == 0:
