@@ -6,7 +6,7 @@ import tf
 from nav_msgs.msg import Odometry
 import math
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
-from actionlib_msgs.msg import GoalStatus
+from actionlib_msgs.msg import GoalStatusArray  # 修正: GoalStatus から GoalStatusArray へ
 import csv
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from geometry_msgs.msg import Quaternion
@@ -17,6 +17,7 @@ from std_msgs.msg import Int32
 import numpy as np
 from sensor_msgs.msg import LaserScan
 import cv2
+from sensor_msgs.msg import Joy  # 追加: ジョイスティックのメッセージタイプをインポート
 
 # List of waypoints to navigate
 waypoints = []
@@ -38,6 +39,14 @@ offset_r = 0.0
 
 # 追加：手動再開フラグの初期化
 manual_start_flag = 0
+
+# 追加：ジョイスティック制御関連のフラグと変数
+joystick_control_enabled = False
+joystick_linear_vel = 0.0
+joystick_angular_vel = 0.0
+prev_ps_button_state = 0  # 前回のPSボタンの状態
+max_linear_speed = 0.8  # 最大直線速度 [m/s]
+max_angular_speed = 1.0  # 最大角速度 [rad/s]
 
 # Publishers to control robot velocity and initialize position
 pub_vel = rospy.Publisher("/ypspur_ros/cmd_vel", Twist, queue_size=10)
@@ -83,7 +92,7 @@ def goalstatusCallBack(data):
     Checks if the goal was not successful (e.g., aborted or failed).
 
     Args:
-        data: GoalStatus message.
+        data: GoalStatusArray message.
     """
     global isGoalError
     isGoalError = False
@@ -98,21 +107,48 @@ def velCallBack(data):
     Args:
         data: Twist message with velocity information.
     """
-    if boostFlag == 1:
-        # Boost mode is on, adjust the speed
-        data.linear.x *= 1.0  # Currently not actually boosting, could change multiplier
-    elif stopFlag == 1:
-        # Stop the robot completely
-        print("stop_flag_on")
-        data.linear.x = 0
-        data.angular.x = 0
-        data.angular.y = 0
-        data.angular.z = 0
-    else:
-        data.linear.x *= 1.0  # No change to speed
+    global joystick_control_enabled, joystick_linear_vel, joystick_angular_vel
 
-    # Publish the adjusted velocity
-    pub_vel.publish(data)
+    if joystick_control_enabled:
+        # ジョイスティックによる制御に切り替える
+        twist_msg = Twist()
+        twist_msg.linear.x = joystick_linear_vel
+        twist_msg.angular.z = joystick_angular_vel
+        pub_vel.publish(twist_msg)
+    else:
+        # Publish the adjusted velocity
+        pub_vel.publish(data)
+
+def joyCallBack(data):
+    """
+    Callback function to handle joystick input.
+    Toggles joystick control when the middle button is pressed.
+
+    Args:
+        data: Joy message with joystick information.
+    """
+    global joystick_control_enabled, joystick_linear_vel, joystick_angular_vel, prev_ps_button_state
+
+    # PSボタンのインデックスを確認（一般的には16だが、デバイスによって異なる場合がある）
+    ps_button_index = 16  
+    ps_button_state = data.buttons[ps_button_index] if len(data.buttons) > ps_button_index else 0
+
+    if ps_button_state == 1 and prev_ps_button_state == 0:
+        # PSボタンが押されたときにジョイスティック制御をトグル
+        joystick_control_enabled = not joystick_control_enabled
+        if joystick_control_enabled:
+            print("Joystick control enabled")
+        else:
+            print("Joystick control disabled")
+
+    prev_ps_button_state = ps_button_state
+
+    if joystick_control_enabled:
+        # ジョイスティックの軸を取得
+        # axes[1]: 左スティックの縦方向（前後）
+        # axes[0]: 左スティックの横方向（左右）
+        joystick_linear_vel = data.axes[3] * max_linear_speed
+        joystick_angular_vel = data.axes[2] * max_angular_speed
 
 def mclposeCallBack(data):
     """
@@ -265,11 +301,11 @@ if __name__ == '__main__':
     client.wait_for_server()
 
     # Subscribe to relevant topics
-    rospy.Subscriber('/move_base/status', GoalStatus, goalstatusCallBack)
+    rospy.Subscriber('/move_base/status', GoalStatusArray, goalstatusCallBack)  # 修正: GoalStatusArray を使用
     rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, mclposeCallBack)
-    rospy.Subscriber('/ypspur_ros/cmd_vel_old', Twist, velCallBack)
+    rospy.Subscriber('/ypspur_ros/cmd_vel_nav', Twist, velCallBack)
     rospy.Subscriber('/scan_livox_front_low_move', LaserScan, laserScanCallback)
-
+    rospy.Subscriber('/joy', Joy, joyCallBack)  # 追加: ジョイスティックのサブスクライバ
     # 追加：手動再開トピックの購読
     rospy.Subscriber('/manual_start', Int32, manual_start_callback)
 
@@ -290,6 +326,7 @@ if __name__ == '__main__':
                     (int(row[8]), int(row[9]), int(row[10]), int(row[11]), int(row[12])),  # Flags for conditions
                     (int(row[0]))  # Waypoint number
                 ])
+
 
     # Main loop for patrolling through waypoints
     while not rospy.is_shutdown():
@@ -318,6 +355,11 @@ if __name__ == '__main__':
             while not rospy.is_shutdown():
                 if int(pose[3]) < 1:
                     break
+                # ジョイスティック制御が有効な場合は待機
+                if joystick_control_enabled:
+                    rate.sleep(waitTime_ms / 1000)
+                    continue
+
                 # Calculate the distance to the current goal
                 distance_to_goal = math.sqrt((pose_x - goal.target_pose.pose.position.x) ** 2 + (pose_y - goal.target_pose.pose.position.y) ** 2)
                 
