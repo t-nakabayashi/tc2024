@@ -77,14 +77,40 @@ while not rospy.is_shutdown():
                 marker_data.scale.x = 2
                 marker_data.scale.y = 0.1
                 marker_data.scale.z = 0.1
-            elif int(row[9]) != 0 or int(row[8]) != 0 :
-                marker_data.color.r = 0.0
-                marker_data.color.g = 0.0
-                marker_data.color.b = 1.0
-                marker_data.color.a = 1.0
-                marker_data.scale.x = 2
-                marker_data.scale.y = 0.1
-                marker_data.scale.z = 0.1
+            elif float(row[9]) > 0:
+                if float(row[9]) < 1:
+                    marker_data.color.r = 0.0
+                    marker_data.color.g = 0.0
+                    marker_data.color.b = 1.0
+                    marker_data.color.a = 1.0
+                    marker_data.scale.x = 1
+                    marker_data.scale.y = 0.1
+                    marker_data.scale.z = 0.1    
+                else:
+                    marker_data.color.r = 0.0
+                    marker_data.color.g = 0.0
+                    marker_data.color.b = 1.0
+                    marker_data.color.a = 1.0
+                    marker_data.scale.x = 2
+                    marker_data.scale.y = 0.1
+                    marker_data.scale.z = 0.1               
+            elif float(row[8]) > 0 :
+                if float(row[8]) < 1:
+                    marker_data.color.r = 1.0
+                    marker_data.color.g = 1.0
+                    marker_data.color.b = 1.0
+                    marker_data.color.a = 1.0
+                    marker_data.scale.x = 1
+                    marker_data.scale.y = 0.1
+                    marker_data.scale.z = 0.1    
+                else:
+                    marker_data.color.r = 1.0
+                    marker_data.color.g = 1.0
+                    marker_data.color.b = 1.0
+                    marker_data.color.a = 1.0
+                    marker_data.scale.x = 2
+                    marker_data.scale.y = 0.1
+                    marker_data.scale.z = 0.1               
             else:
                 marker_data.color.r = 0.0
                 marker_data.color.g = 1.0
