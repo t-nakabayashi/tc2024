@@ -330,7 +330,7 @@ if __name__ == '__main__':
 
     # Main loop for patrolling through waypoints
     while not rospy.is_shutdown():
-        for pose in waypoints:
+        for pose_index, pose in enumerate(waypoints):  # enumerateを使用してpose_indexを取得
             boostFlag = 0
             goal = goal_pose(pose)
             client.send_goal(goal)  # Send the goal to move_base
@@ -419,43 +419,43 @@ if __name__ == '__main__':
                         client.send_goal(original_goal)
 
                     if waitCounter_ms % 20000 == 0:
-                        # After 20 seconds, if no progress, create a sub-goal 1m to the open side
-                        theta = quaternion_to_euler(pose[1][0], pose[1][1], pose[1][2], pose[1][3])
-                        if float(pose[2][1]) > 0:
-                            print("offset_l", offset_l, "offset_r", offset_r)
-                            # If left is open, create a sub-goal 1m to the left
-                            print("create sub-goal L")
-                            if 0.0 < offset_l:
-                                if offset_l < pose[2][1]:
-                                    # 回避距離に上限を設定
-                                    goal.target_pose.pose.position.x = pose_x + math.cos(theta.z + 1.57078) * offset_l
-                                    goal.target_pose.pose.position.y = pose_y + math.sin(theta.z + 1.57078) * offset_l
-                                    print(offset_l)
-                                else:
-                                    print("offset上限を超えたため回避をキャンセル")
-                
-                            else:
-                                goal.target_pose.pose.position.x = pose_x + math.cos(theta.z + 1.57078) * 0.5
-                                goal.target_pose.pose.position.y = pose_y + math.sin(theta.z + 1.57078) * 0.5
-                                print("nooffset" + str(offset_l))
-                            isSubGoalActive = True
-                        elif float(pose[2][0]) > 0:
-                            # If right is open, create a sub-goal 1m to the right
-                            print("create sub-goal R")
-                            if 0.0 < offset_r:
-                                if offset_r < pose[2][0]:
-                                    goal.target_pose.pose.position.x = pose_x + math.cos(theta.z - 1.57078) * offset_r
-                                    goal.target_pose.pose.position.y = pose_y + math.sin(theta.z - 1.57078) * offset_r
-                                    print(offset_r)
-                                else:
-                                    print("offset上限を超えたため回避をキャンセル")
-                            else:
-                                goal.target_pose.pose.position.x = pose_x + math.cos(theta.z - 1.57078) * 0.5
-                                goal.target_pose.pose.position.y = pose_y + math.sin(theta.z - 1.57078) * 0.5
-                            isSubGoalActive = True
+                        # 基準となる直線の方向を計算
+                        if pose_index > 0:  # 現在のウェイポイントのインデックスが0でない場合
+                            prev_pose = waypoints[pose_index - 1]
+                            direction_x = pose[0][0] - prev_pose[0][0]
+                            direction_y = pose[0][1] - prev_pose[0][1]
+                            direction_length = math.sqrt(direction_x**2 + direction_y**2)
+                            direction_x /= direction_length  # 正規化
+                            direction_y /= direction_length  # 正規化
 
-                        # Send the sub-goal
-                        client.send_goal(goal)
+                            # 垂直方向のベクトルを計算
+                            perp_x = -direction_y
+                            perp_y = direction_x
+
+                            # 左右の回避ゴールを計算
+                            if float(pose[2][1]) > 0:  # 左が開いている場合
+                                if offset_l <= float(pose[2][1]):  # フラグ内の距離で回避可能な場合のみ
+                                    print("create sub-goal L")
+                                    goal.target_pose.pose.position.x = pose_x + perp_x * offset_l
+                                    goal.target_pose.pose.position.y = pose_y + perp_y * offset_l
+                                    isSubGoalActive = True
+                                else:
+                                    print("Left offset too large, skipping avoidance.")
+                            elif float(pose[2][0]) > 0:  # 右が開いている場合
+                                if offset_r <= float(pose[2][0]):  # フラグ内の距離で回避可能な場合のみ
+                                    print("create sub-goal R")
+                                    goal.target_pose.pose.position.x = pose_x - perp_x * offset_r
+                                    goal.target_pose.pose.position.y = pose_y - perp_y * offset_r
+                                    isSubGoalActive = True
+                                else:
+                                    print("Right offset too large, skipping avoidance.")
+
+                            # サブゴールを送信
+                            if isSubGoalActive:
+                                client.send_goal(goal)
+                        else:
+                            print("Cannot calculate sub-goal direction: no previous waypoint")
+
 
                     if waitCounter_ms % 60000 == 0:
                         # If no progress after 50 seconds, move to the next goal if conditions allow
