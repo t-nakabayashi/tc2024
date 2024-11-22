@@ -323,7 +323,7 @@ if __name__ == '__main__':
                 waypoints.append([
                     (float(row[1]), float(row[2]), 0.0),  # Position (x, y, z)
                     (0.0, 0.0, float(row[6]), float(row[7])),  # Orientation (quaternion)
-                    (int(row[8]), int(row[9]), int(row[10]), int(row[11]), int(row[12])),  # Flags for conditions
+                    (float(row[8]), float(row[9]), int(row[10]), int(row[11]), int(row[12])),  # Flags for conditions
                     (int(row[0]))  # Waypoint number
                 ])
 
@@ -421,7 +421,7 @@ if __name__ == '__main__':
                     if waitCounter_ms % 20000 == 0:
                         # After 20 seconds, if no progress, create a sub-goal 1m to the open side
                         theta = quaternion_to_euler(pose[1][0], pose[1][1], pose[1][2], pose[1][3])
-                        if int(pose[2][1]) > 0:
+                        if float(pose[2][1]) > 0:
                             print("offset_l", offset_l, "offset_r", offset_r)
                             # If left is open, create a sub-goal 1m to the left
                             print("create sub-goal L")
@@ -439,7 +439,7 @@ if __name__ == '__main__':
                                 goal.target_pose.pose.position.y = pose_y + math.sin(theta.z + 1.57078) * 0.5
                                 print("nooffset" + str(offset_l))
                             isSubGoalActive = True
-                        elif int(pose[2][0]) > 0:
+                        elif float(pose[2][0]) > 0:
                             # If right is open, create a sub-goal 1m to the right
                             print("create sub-goal R")
                             if 0.0 < offset_r:
