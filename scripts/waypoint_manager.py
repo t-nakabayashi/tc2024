@@ -272,8 +272,16 @@ def laserScanCallback(data):
         xy_extract_l = sorted(xy_extract_l, key=lambda c: c[1])
         xy_extract_r = sorted(xy_extract_r, key=lambda c: c[1], reverse=True)
         # 始点をx軸上(y=0)として、始点に近い方から順に隣の点とのy方向の距離を算出し障害物の端を探す
-        offset_l = calcAvoidanceOffset(xy_extract_l, robot_width, half_width)
-        offset_r = calcAvoidanceOffset(xy_extract_r, robot_width, half_width)
+
+        if calcAvoidanceOffset(xy_extract_l, robot_width, half_width) != 0.0:
+            # 値が0のときは0.5を仮に入れる
+            offset_l = calcAvoidanceOffset(xy_extract_l, robot_width, half_width)
+        else:
+            offset_l = 0.5
+        if calcAvoidanceOffset(xy_extract_r, robot_width, half_width) != 0.0
+          offset_r = calcAvoidanceOffset(xy_extract_r, robot_width, half_width)
+        else:
+            offset_r = 0.5
     #print("offset_l", offset_l, "offset_r", offset_r)
     laserScanViewer("laserscan", pointcloud, offset_l, -1.0 * offset_r, robot_width, half_width, max_obstacle_distance)
 
