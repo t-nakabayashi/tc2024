@@ -21,6 +21,13 @@ move_base
 ~~~
 
 ### 依存パッケージの導入方法
+#### gpt接続に関わるツールのインストール
+
+~~~
+pip install python-dotenv openai requests
+~~~
+
+/scripts/.env.sampleを/scripts/.envにリネームし、各自で取得したAPIキーを入れる
 
 #### ypspurのインストール
 https://github.com/openspur/yp-spur/blob/master/doc/README.ja.md
