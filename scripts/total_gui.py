@@ -13,7 +13,7 @@ from std_msgs.msg import Int32  # 追加：メッセージ型のインポート
 LOCARIZATION_LAUNCH = ["roslaunch", "tc2024", "3-1_locarization_fastlio_1st.launch"]
 NAVIGATION_LAUNCH_TEMPLATE = ["roslaunch", "tc2024", "4_run_1st.launch", "start_num:="]
 LOCARIZATION_NEXT_LAUNCH = ["roslaunch", "tc2024", "3-1_locarization_fastlio_next.launch"]
-NAVIGATION_NEXT_LAUNCH = ["roslaunch", "tc2024", "4_run_next.launch"]
+NAVIGATION_NEXT_LAUNCH = ["roslaunch", "tc2024", "4_run_next.launch", "start_num:="]
 
 # プロセスを保持する辞書
 processes = {}
@@ -77,7 +77,13 @@ def start_navigation_with_waypoint():
 def restart_navigation():
     """ナビゲーションの再起動"""
     stop_launch("navigation")
-    start_navigation_with_waypoint()
+    waypoint = "1"  # デフォルト値は0
+    if not waypoint.isdigit():
+        print("Invalid waypoint number. Please enter a numeric value.")
+        return
+    # start_num:=<waypoint> を1つの文字列として扱う
+    navigation_command = NAVIGATION_NEXT_LAUNCH + [f"start_num:={waypoint}"]
+    start_launch("navigation", navigation_command)
 
 def stop_navigation():
     stop_launch("navigation")
