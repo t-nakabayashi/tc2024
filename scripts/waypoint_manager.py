@@ -17,7 +17,6 @@ from std_msgs.msg import Int32
 import numpy as np
 from sensor_msgs.msg import LaserScan
 import cv2
-from sensor_msgs.msg import Joy  # 追加: ジョイスティックのメッセージタイプをインポート
 
 # List of waypoints to navigate
 waypoints = []
@@ -37,16 +36,11 @@ pointcloud = np.empty((0, 2))
 offset_l = 0.0
 offset_r = 0.0
 
-# 追加：手動再開フラグの初期化
+# 手動再開フラグの初期化
 manual_start_flag = 0
 
-# 追加：ジョイスティック制御関連のフラグと変数
-joystick_control_enabled = False
-joystick_linear_vel = 0.0
-joystick_angular_vel = 0.0
-prev_ps_button_state = 0  # 前回のPSボタンの状態
-max_linear_speed = 0.8  # 最大直線速度 [m/s]
-max_angular_speed = 1.0  # 最大角速度 [rad/s]
+# gpt outputの初期化
+gpt_output = 99
 
 # Publishers to control robot velocity and initialize position
 pub_vel = rospy.Publisher("/ypspur_ros/cmd_vel", Twist, queue_size=10)
@@ -102,53 +96,11 @@ def goalstatusCallBack(data):
 
 def velCallBack(data):
     """
-    Callback function to adjust the robot's velocity based on flags.
-
-    Args:
-        data: Twist message with velocity information.
+    ジョイスティック制御の名残 TODO削除
     """
-    global joystick_control_enabled, joystick_linear_vel, joystick_angular_vel
 
-    if joystick_control_enabled:
-        # ジョイスティックによる制御に切り替える
-        twist_msg = Twist()
-        twist_msg.linear.x = joystick_linear_vel
-        twist_msg.angular.z = joystick_angular_vel
-        pub_vel.publish(twist_msg)
-    else:
-        # Publish the adjusted velocity
-        pub_vel.publish(data)
+    pub_vel.publish(data)
 
-def joyCallBack(data):
-    """
-    Callback function to handle joystick input.
-    Toggles joystick control when the middle button is pressed.
-
-    Args:
-        data: Joy message with joystick information.
-    """
-    global joystick_control_enabled, joystick_linear_vel, joystick_angular_vel, prev_ps_button_state
-
-    # PSボタンのインデックスを確認（一般的には16だが、デバイスによって異なる場合がある）
-    ps_button_index = 16  
-    ps_button_state = data.buttons[ps_button_index] if len(data.buttons) > ps_button_index else 0
-
-    if ps_button_state == 1 and prev_ps_button_state == 0:
-        # PSボタンが押されたときにジョイスティック制御をトグル
-        joystick_control_enabled = not joystick_control_enabled
-        if joystick_control_enabled:
-            print("Joystick control enabled")
-        else:
-            print("Joystick control disabled")
-
-    prev_ps_button_state = ps_button_state
-
-    if joystick_control_enabled:
-        # ジョイスティックの軸を取得
-        # axes[1]: 左スティックの縦方向（前後）
-        # axes[0]: 左スティックの横方向（左右）
-        joystick_linear_vel = data.axes[3] * max_linear_speed
-        joystick_angular_vel = data.axes[2] * max_angular_speed
 
 def mclposeCallBack(data):
     """
@@ -272,23 +224,30 @@ def laserScanCallback(data):
         xy_extract_l = sorted(xy_extract_l, key=lambda c: c[1])
         xy_extract_r = sorted(xy_extract_r, key=lambda c: c[1], reverse=True)
         # 始点をx軸上(y=0)として、始点に近い方から順に隣の点とのy方向の距離を算出し障害物の端を探す
+        offset = calcAvoidanceOffset(xy_extract_l, robot_width, half_width)
+        if offset <= 1.0:
+            offset_l = offset
+        else:
+            offset_l = 1.0
 
-        if calcAvoidanceOffset(xy_extract_l, robot_width, half_width) != 0.0:
-            # 値が0のときは0.5を仮に入れる
-            offset_l = calcAvoidanceOffset(xy_extract_l, robot_width, half_width)
+        offset = calcAvoidanceOffset(xy_extract_r, robot_width, half_width)
+        if offset <= 1.0:
+            offset_r = offset
         else:
-            offset_l = 0.5
-        if calcAvoidanceOffset(xy_extract_r, robot_width, half_width) != 0.0
-          offset_r = calcAvoidanceOffset(xy_extract_r, robot_width, half_width)
-        else:
-            offset_r = 0.5
+            offset_r = 1.0
+            
     #print("offset_l", offset_l, "offset_r", offset_r)
-    laserScanViewer("laserscan", pointcloud, offset_l, -1.0 * offset_r, robot_width, half_width, max_obstacle_distance)
+    #laserScanViewer("laserscan", pointcloud, offset_l, -1.0 * offset_r, robot_width, half_width, max_obstacle_distance)
 
 # 追加：手動再開のコールバック関数
 def manual_start_callback(data):
     global manual_start_flag
     manual_start_flag = data.data  # データをフラグに格納
+
+# GPT結果格納のコールバック関数
+def gpt_output_callback(data):
+    global gpt_output # 不定：９９、障害物がない：０、人やロボット：１、カラーコーン：２
+    gpt_putput = data.data 
 
 if __name__ == '__main__':
     rospy.init_node('patrol')  # Initialize the patrol node
@@ -313,9 +272,11 @@ if __name__ == '__main__':
     rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, mclposeCallBack)
     rospy.Subscriber('/ypspur_ros/cmd_vel_nav', Twist, velCallBack)
     rospy.Subscriber('/scan_livox_front_low_move', LaserScan, laserScanCallback)
-    rospy.Subscriber('/joy', Joy, joyCallBack)  # 追加: ジョイスティックのサブスクライバ
     # 追加：手動再開トピックの購読
     rospy.Subscriber('/manual_start', Int32, manual_start_callback)
+
+    # GPT認識モジュールの購読
+    rospy.Subscriber('/gpt_output', Int32, gpt_output_callback)
 
     # Read the waypoints from the CSV file
     with open(waypoint_name, 'r') as f:
@@ -357,21 +318,17 @@ if __name__ == '__main__':
             original_goal = goal_pose(pose)  # Store the original goal
 
             # Reset manual start flag
-            manual_start_flag = 0  # 追加：手動再開フラグをリセット
+            manual_start_flag = 0  # 手動再開フラグをリセット
 
             # Wait until the goal is reached or some condition is met
             while not rospy.is_shutdown():
                 if int(pose[3]) < 1:
                     break
-                # ジョイスティック制御が有効な場合は待機
-                if joystick_control_enabled:
-                    rate.sleep(waitTime_ms / 1000)
-                    continue
 
                 # Calculate the distance to the current goal
                 distance_to_goal = math.sqrt((pose_x - goal.target_pose.pose.position.x) ** 2 + (pose_y - goal.target_pose.pose.position.y) ** 2)
                 
-                if distance_to_goal <= 0.5:  # Close enough to the goal
+                if distance_to_goal <= 0.55 and isSubGoalActive != True:  # Close enough to the goal
                     if not pose[2][2] and not pose[2][3]:
                         # If both stop flags are False, move to the next goal immediately
                         print("next")
@@ -407,7 +364,7 @@ if __name__ == '__main__':
                                 except:
                                     print("sig_recog didn't come....")
                                     recog = 0
-                                rospy.sleep(0.1)  # 追加：スリープを挿入
+                                rospy.sleep(0.1)  
 
                             stopFlag = 0
                             manual_start_flag = 0  # フラグをリセット
@@ -421,12 +378,13 @@ if __name__ == '__main__':
                         # Re-send original goal if there was an error and no sub-goal is active
                         client.send_goal(original_goal)
 
-                    if waitCounter_ms % 5000 == 0 and not isSubGoalActive:
-                        # Re-send the original goal every 1 second if no sub-goal is active
-                        # print("Resending original goal...")
-                        client.send_goal(original_goal)
+                    #if waitCounter_ms % 50000 == 0 and not isSubGoalActive:
+                    #    # Re-send the original goal every 5 second if no sub-goal is active
+                    #    # print("Resending original goal...")
+                    #    client.send_goal(original_goal)
 
-                    if waitCounter_ms % 20000 == 0:
+                    if (gpt_output == 2 and waitCounter_ms % 15000 == 0) or (gpt_output != 2 and waitCounter_ms % 30000 == 0) :
+                        rospy.loginfo("障害物回避サブゴール送信")
                         # 基準となる直線の方向を計算
                         if pose_index > 0:  # 現在のウェイポイントのインデックスが0でない場合
                             prev_pose = waypoints[pose_index - 1]
@@ -440,6 +398,7 @@ if __name__ == '__main__':
                             perp_x = -direction_y
                             perp_y = direction_x
 
+
                             # 左右の回避ゴールを計算
                             if float(pose[2][1]) > 0:  # 左が開いている場合
                                 if offset_l <= float(pose[2][1]):  # フラグ内の距離で回避可能な場合のみ
@@ -448,6 +407,9 @@ if __name__ == '__main__':
                                     goal.target_pose.pose.position.y = pose_y + perp_y * offset_l
                                     isSubGoalActive = True
                                 else:
+                                    goal.target_pose.pose.position.x = pose_x + perp_x * 1
+                                    goal.target_pose.pose.position.y = pose_y + perp_y * 1
+                                    isSubGoalActive = True
                                     print("Left offset too large, skipping avoidance.")
                             elif float(pose[2][0]) > 0:  # 右が開いている場合
                                 if offset_r <= float(pose[2][0]):  # フラグ内の距離で回避可能な場合のみ
@@ -456,6 +418,8 @@ if __name__ == '__main__':
                                     goal.target_pose.pose.position.y = pose_y - perp_y * offset_r
                                     isSubGoalActive = True
                                 else:
+                                    goal.target_pose.pose.position.x = pose_x - perp_x * 1
+                                    goal.target_pose.pose.position.y = pose_y - perp_y * 1
                                     print("Right offset too large, skipping avoidance.")
 
                             # サブゴールを送信
@@ -465,16 +429,18 @@ if __name__ == '__main__':
                             print("Cannot calculate sub-goal direction: no previous waypoint")
 
 
-                    if waitCounter_ms % 60000 == 0:
+                    if waitCounter_ms % 70000 == 0:
+                        rospy.loginfo("ネクストゴール")
                         # If no progress after 50 seconds, move to the next goal if conditions allow
                         if not pose[2][2] and not pose[2][3]:
                             if not pose[2][4]:
                                 break
-                    else:
-                        # Check if sub-goal is reached within 0.3m tolerance
+
+                    if isSubGoalActive == True:
+                        # Check if sub-goal is reached within 0.1m tolerance
                         distance_to_subgoal = math.sqrt((pose_x - goal.target_pose.pose.position.x) ** 2 + (pose_y - goal.target_pose.pose.position.y) ** 2)
-                        if distance_to_subgoal <= 0.3:
-                            print("Sub-goal reached, resending original goal")
+                        if distance_to_subgoal <= 0.55:
+                            rospy.loginfo("サブゴール到達")
                             client.send_goal(original_goal)
                             isSubGoalActive = False
                             waitCounter_ms = 0
