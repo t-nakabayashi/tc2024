@@ -19,8 +19,8 @@ def livox_callback(msg):
 
 # VelodyneからのPointCloudデータをそのままパブリッシュするコールバック
 def velodyne_callback(msg):
-    pass
-    #pub.publish(msg)
+    #pass
+    pub.publish(msg)
 
 def callback2(msg):
     msg.header.frame_id = "mid360_frame_new"
