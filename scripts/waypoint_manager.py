@@ -248,6 +248,7 @@ def manual_start_callback(data):
 def gpt_output_callback(data):
     global gpt_output # 不定：９９、障害物がない：０、人やロボット：１、カラーコーン：２
     gpt_putput = data.data 
+    print(gpt_output)
 
 if __name__ == '__main__':
     rospy.init_node('patrol')  # Initialize the patrol node
@@ -296,6 +297,9 @@ if __name__ == '__main__':
                     (int(row[0]))  # Waypoint number
                 ])
 
+    manual_start_flag = 0  # 手動再開フラグをリセット
+    while manual_start_flag != 1 and not rospy.is_shutdown():
+        rospy.sleep(0.1)
 
     # Main loop for patrolling through waypoints
     while not rospy.is_shutdown():
