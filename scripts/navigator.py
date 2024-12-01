@@ -20,8 +20,8 @@ class TimeOptimalController:
         self.max_w = rospy.get_param('~MAX_W', 1.8)              # 最大角速度 [rad/s]
         self.max_a_v = rospy.get_param('~MAX_ACC_V', 1.0)        # 最大線加速度 [m/s^2]
         self.max_a_w = rospy.get_param('~MAX_ACC_W', 1.5)        # 最大角加速度 [rad/s^2]
-        self.position_tolerance = rospy.get_param('~POSITION_TOLERANCE', 0.4)  # 位置誤差の許容範囲 [m]
-        self.angle_tolerance = rospy.get_param('~ANGLE_TOLERANCE', 0.2)        # 角度誤差の許容範囲 [rad]
+        self.position_tolerance = rospy.get_param('~POSITION_TOLERANCE', 0.5)  # 位置誤差の許容範囲 [m]
+        self.angle_tolerance = rospy.get_param('~ANGLE_TOLERANCE', 0.25)        # 角度誤差の許容範囲 [rad]
         self.control_rate_hz = rospy.get_param('~CONTROL_RATE', 20.0)          # 制御周期 [Hz]
         self.control_dt = 1.0 / self.control_rate_hz                           # 制御周期 [s]
 
@@ -218,9 +218,9 @@ class TimeOptimalController:
 
             # 障害物の距離と停止距離を比較し、速度を減速または停止
             if self.obstacle_distance < stopping_distance:
-                rospy.logwarn("Obstacle detected within stopping distance! Distance: {:.2f} m, Stopping Distance: {:.2f} m".format(
-                    self.obstacle_distance, stopping_distance
-                ))
+                #rospy.logwarn("Obstacle detected within stopping distance! Distance: {:.2f} m, Stopping Distance: {:.2f} m".format(
+                #    self.obstacle_distance, stopping_distance
+                #))
                 v_desired_scaled = 0.0
             elif self.obstacle_distance < self.safety_distance:
                 # 安全距離内に障害物がある場合、速度を減速
