@@ -85,6 +85,11 @@ def restart_navigation():
     navigation_command = NAVIGATION_NEXT_LAUNCH + [f"start_num:={waypoint}"]
     start_launch("navigation", navigation_command)
 
+def restart_all():
+    stop_navigation()
+    restart_locarization()
+    restart_navigation()
+
 def stop_navigation():
     stop_launch("navigation")
 
@@ -165,6 +170,9 @@ manual_start_frame = tk.Frame(root)
 manual_start_frame.pack(pady=10, anchor="w")
 manual_start_button = tk.Button(manual_start_frame, text="Manual Start", command=send_manual_start, width=20, bg='green', fg='white')
 manual_start_button.pack(side="left", padx=5)
+
+restart_navigation_button = tk.Button(manual_start_frame, text="Restart all", command=restart_all, width=20)
+restart_navigation_button.pack(side="left", padx=5)
 
 # プログラム終了時のフック（GUIが閉じられた際にも呼ばれる）
 root.protocol("WM_DELETE_WINDOW", lambda: (stop_all_launches(), root.destroy()))
