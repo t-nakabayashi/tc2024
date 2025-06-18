@@ -14,7 +14,7 @@
 	<param name="filter_size_map" type="double" value="0.5" />
 	<param name="cube_side_length" type="double" value="1000" />
 	<param name="runtime_pos_log_enable" type="bool" value="0" />
-    <node pkg="fast_lio" type="fastlio_mapping" name="laserMapping" output="screen" />
+    <node pkg="fast_lio" type="fastlio_mapping" name="laserMapping"/>
 	<!--param name="use_sim_time" value="true"/-->
 	<node pkg="tf" type="static_transform_publisher" name="tf_base2mid360_new2" args="-0.425 0 1.005 0 0 0 /base_link /mid360_frame_new 50" />
 	<!--node pkg="tf" type="static_transform_publisher" name="body2base_link" args="0 0 0 0 0 0 /body /base_link 50" /-->
@@ -61,7 +61,7 @@
 	  <rosparam command="load" file="$(arg config_file)"/>
 
 	  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find tc2024)/config/mcl_3dl.rviz" />
-	  <node pkg="mcl_3dl" type="mcl_3dl" name="mcl_3dl" output="screen" unless="$(arg generate_test_bag)">
+	  <node pkg="mcl_3dl" type="mcl_3dl" name="mcl_3dl"  unless="$(arg generate_test_bag)">
 	    <param name="compatible" value="1" />
 	    <remap from="/imu/data" to="/mid360/livox/imu_new" />
 	    <remap from="/odom" to="/Odometry" />
@@ -112,7 +112,7 @@
 		<param name="start_num"	value="0"/>
 		<param name="waypoint"             value="$(arg waypoint_file)"/>
 	</node-->
-
+scripts/total_gui.py
 	<node pkg="tc2024" name="waypoint_map_view" type="waypoint_map_view.py">
 		<param name="waypoint"             value="$(arg waypoint_file)"/>
   </node>

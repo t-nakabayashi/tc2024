@@ -14,4 +14,6 @@
     <!-- navigatorノードの定義 -->
     <node pkg="tc2024" name="navigator" type="navigator.py" output="screen" >
     </node>
+    <node pkg="tc2024" name="gpt_frontcam_detector" type="gpt_frontcam_detector.py" output="screen" >
+    </node>
 </launch>

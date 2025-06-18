@@ -16,7 +16,7 @@ class TimeOptimalController:
         rospy.init_node('time_optimal_controller')
 
         # パラメータの設定
-        self.max_v = rospy.get_param('~MAX_VEL', 1.0)            # 最大線速度 [m/s]
+        self.max_v = rospy.get_param('~MAX_VEL', 1.1)            # 最大線速度 [m/s]
         self.max_w = rospy.get_param('~MAX_W', 1.8)              # 最大角速度 [rad/s]
         self.max_a_v = rospy.get_param('~MAX_ACC_V', 1.0)        # 最大線加速度 [m/s^2]
         self.max_a_w = rospy.get_param('~MAX_ACC_W', 1.5)        # 最大角加速度 [rad/s^2]
@@ -26,8 +26,8 @@ class TimeOptimalController:
         self.control_dt = 1.0 / self.control_rate_hz                           # 制御周期 [s]
 
         # PID制御の初期化（角速度用）
-        self.kp_w = 0.6  # Pゲイン
-        self.ki_w = 0.02  # Iゲイン
+        self.kp_w = 0.65  # Pゲイン
+        self.ki_w = 0.001  # Iゲイン
         self.kd_w = 0.02  # Dゲイン
         self.integral_w = 0.0
         self.prev_yaw_error = 0.0
@@ -117,7 +117,7 @@ class TimeOptimalController:
                 angle = angle_min + i * angle_increment
 
                 # 後方のビームの場合は無視
-                if math.degrees(angle) < -90.0 or math.degrees(angle) > 90.0:
+                if math.degrees(angle) < -60.0 or math.degrees(angle) > 60.0:
                     continue
 
                 # ビームの位置をXY平面に変換

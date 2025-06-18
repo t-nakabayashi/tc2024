@@ -45,6 +45,8 @@ gpt_output = 99
 # Publishers to control robot velocity and initialize position
 pub_vel = rospy.Publisher("/ypspur_ros/cmd_vel", Twist, queue_size=10)
 pub_init = rospy.Publisher('initialpose', PoseWithCovarianceStamped, queue_size=10)
+pub_time = rospy.Publisher('waypoint_time', Int32, queue_size=10)
+
 
 def quaternion_to_euler(q1, q2, q3, q4):
     """
@@ -208,7 +210,7 @@ def laserScanCallback(data):
     pointcloud = xy.copy()
 
     # ロボットの幅 [m]
-    robot_width = 0.6  
+    robot_width = 0.8  
     half_width = robot_width / 2.0
     # 回避対象障害物の最大距離 [m]
     max_obstacle_distance = 1.5
@@ -225,16 +227,16 @@ def laserScanCallback(data):
         xy_extract_r = sorted(xy_extract_r, key=lambda c: c[1], reverse=True)
         # 始点をx軸上(y=0)として、始点に近い方から順に隣の点とのy方向の距離を算出し障害物の端を探す
         offset = calcAvoidanceOffset(xy_extract_l, robot_width, half_width)
-        if offset <= 1.0:
+        if offset >= 0.75:
             offset_l = offset
         else:
-            offset_l = 1.0
+            offset_l = 0.75
 
         offset = calcAvoidanceOffset(xy_extract_r, robot_width, half_width)
-        if offset <= 1.0:
+        if offset >= 0.75:
             offset_r = offset
         else:
-            offset_r = 1.0
+            offset_r = 0.75
             
     #print("offset_l", offset_l, "offset_r", offset_r)
     #laserScanViewer("laserscan", pointcloud, offset_l, -1.0 * offset_r, robot_width, half_width, max_obstacle_distance)
@@ -248,7 +250,7 @@ def manual_start_callback(data):
 def gpt_output_callback(data):
     global gpt_output # 不定：９９、障害物がない：０、人やロボット：１、カラーコーン：２
     gpt_putput = data.data 
-    print(gpt_output)
+    #print(gpt_output)
 
 if __name__ == '__main__':
     rospy.init_node('patrol')  # Initialize the patrol node
@@ -326,6 +328,8 @@ if __name__ == '__main__':
 
             # Wait until the goal is reached or some condition is met
             while not rospy.is_shutdown():
+                pub_time.publish(int(waitCounter_ms/1000))
+
                 if int(pose[3]) < 1:
                     break
 
@@ -387,7 +391,7 @@ if __name__ == '__main__':
                     #    # print("Resending original goal...")
                     #    client.send_goal(original_goal)
 
-                    if (gpt_output == 2 and waitCounter_ms % 15000 == 0) or (gpt_output != 2 and waitCounter_ms % 30000 == 0) :
+                    if (gpt_output == 2 and waitCounter_ms % 20000 == 0) or (gpt_output != 2 and waitCounter_ms % 30000 == 0) :
                         rospy.loginfo("障害物回避サブゴール送信")
                         # 基準となる直線の方向を計算
                         if pose_index > 0:  # 現在のウェイポイントのインデックスが0でない場合
@@ -407,12 +411,12 @@ if __name__ == '__main__':
                             if float(pose[2][1]) > 0:  # 左が開いている場合
                                 if offset_l <= float(pose[2][1]):  # フラグ内の距離で回避可能な場合のみ
                                     print("create sub-goal L")
-                                    goal.target_pose.pose.position.x = pose_x + perp_x * offset_l
+                                    goal.target_pose.pose.position.x = pose_x + perp_x * offset_l 
                                     goal.target_pose.pose.position.y = pose_y + perp_y * offset_l
                                     isSubGoalActive = True
                                 else:
-                                    goal.target_pose.pose.position.x = pose_x + perp_x * 1
-                                    goal.target_pose.pose.position.y = pose_y + perp_y * 1
+                                    goal.target_pose.pose.position.x = pose_x + perp_x * 0.6
+                                    goal.target_pose.pose.position.y = pose_y + perp_y * 0.6
                                     isSubGoalActive = True
                                     print("Left offset too large, skipping avoidance.")
                             elif float(pose[2][0]) > 0:  # 右が開いている場合
@@ -422,8 +426,8 @@ if __name__ == '__main__':
                                     goal.target_pose.pose.position.y = pose_y - perp_y * offset_r
                                     isSubGoalActive = True
                                 else:
-                                    goal.target_pose.pose.position.x = pose_x - perp_x * 1
-                                    goal.target_pose.pose.position.y = pose_y - perp_y * 1
+                                    goal.target_pose.pose.position.x = pose_x - perp_x * 0.6
+                                    goal.target_pose.pose.position.y = pose_y - perp_y * 0.6
                                     print("Right offset too large, skipping avoidance.")
 
                             # サブゴールを送信
